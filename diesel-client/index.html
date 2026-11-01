@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="ru" class="bg-[#09090b]" style="background-color: #09090b; margin: 0; padding: 0; min-height: 100%;">
+  <head>
+    <meta charset="UTF-8" />
+
+    <!-- Сигнал готовности для VK на первой миллисекунде, ещё до загрузки основного бандла.
+         Тот же протокол, что у @vkontakte/vk-bridge: iOS — webkit.messageHandlers, Android — AndroidBridge,
+         веб (iframe vk.com / m.vk.com) — postMessage родителю. Повторный VKWebAppInit из бандла безопасен. -->
+    <script id="vk-early-init">
+      (function (w) {
+        try {
+          var params = {};
+          var transport = 'none';
+          var ios = w.webkit && w.webkit.messageHandlers;
+          if (w.AndroidBridge && typeof w.AndroidBridge.VKWebAppInit === 'function') {
+            w.AndroidBridge.VKWebAppInit(JSON.stringify(params));
+            transport = 'android';
+          } else if (ios && ios.VKWebAppClose && ios.VKWebAppInit && typeof ios.VKWebAppInit.postMessage === 'function') {
+            ios.VKWebAppInit.postMessage(params);
+            transport = 'ios';
+          } else if (w.parent && w.parent !== w && typeof w.parent.postMessage === 'function') {
+            w.parent.postMessage({ handler: 'VKWebAppInit', params: params, type: 'vk-connect' }, '*');
+            transport = 'web';
+          }
+          w.__vkEarlyInit = { transport: transport, at: Date.now() };
+        } catch (e) {
+          try { w.__vkEarlyInit = { transport: 'error', at: Date.now(), error: String(e && e.message || e) }; } catch (ignore) {}
+        }
+      })(window);
+    </script>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <!-- Растягивание контента под челку и Dynamic Island без черных полос -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+
+    <!-- Цвет адресной строки и шторки для Safari и Chrome -->
+    <meta name="theme-color" content="#09090B" />
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#09090B" />
+
+    <!-- Поддержка PWA и полноэкранного режима на iOS -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+
+    <title>DIESEL ROOM</title>
+
+    <!-- Жесткий запрет кэширования разметки для предотвращения рассинхрона чанков -->
+    <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
+
+    <!-- Полифиллы для старых версий Safari / WebKit (iOS 14-15) -->
+    <script>
+      (function() {
+        try {
+          if (!String.prototype.replaceAll) {
+            String.prototype.replaceAll = function(s, r) {
+              if (Object.prototype.toString.call(s).toLowerCase() === '[object regexp]') return this.replace(s, r);
+              return this.replace(new RegExp(String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), r);
+            };
+          }
+          if (!Array.prototype.at) {
+            Array.prototype.at = function(n) {
+              n = Math.trunc(n) || 0;
+              if (n < 0) n += this.length;
+              if (n < 0 || n >= this.length) return undefined;
+              return this[n];
+            };
+          }
+          if (!Object.hasOwn) {
+            Object.hasOwn = function(obj, prop) {
+              return Object.prototype.hasOwnProperty.call(obj, prop);
+            };
+          }
+          if (typeof window.crypto === 'undefined') {
+            window.crypto = {};
+          }
+          if (!window.crypto.randomUUID) {
+            window.crypto.randomUUID = function() {
+              return '10000000-1000-4000-8000-100000000000'.replace(/[018]/g, function(c) {
+                return (c ^ (window.crypto.getRandomValues ? window.crypto.getRandomValues(new Uint8Array(1))[0] : Math.floor(Math.random() * 256)) & 15 >> c / 4).toString(16);
+              });
+            };
+          }
+          if (!Array.prototype.findLast) {
+            Array.prototype.findLast = function(predicate) {
+              for (var i = this.length - 1; i >= 0; i--) {
+                if (predicate(this[i], i, this)) return this[i];
+              }
+              return undefined;
+            };
+          }
+          if (!Array.prototype.findLastIndex) {
+            Array.prototype.findLastIndex = function(predicate) {
+              for (var i = this.length - 1; i >= 0; i--) {
+                if (predicate(this[i], i, this)) return i;
+              }
+              return -1;
+            };
+          }
+          if (typeof window.structuredClone === 'undefined') {
+            window.structuredClone = function(val) {
+              return JSON.parse(JSON.stringify(val));
+            };
+          }
+        } catch (e) {}
+      })();
+    </script>
+
+  </head>
+  <body class="bg-[#09090b] text-white min-h-screen w-full m-0 p-0" style="background-color: #09090b; margin: 0; padding: 0; min-height: 100vh;">
+    <div id="root" class="min-h-screen w-full bg-[#09090b]">
+      <!-- Чистый CSS-лоадер до старта React: 0 внешних запросов, без статического текста -->
+      <div id="initial-splash" style="display:flex;min-height:100vh;flex-direction:column;align-items:center;justify-content:center;padding:24px;text-align:center;background-color:#09090b;box-sizing:border-box;">
+        <style>
+          @keyframes dr-spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+          }
+          .dr-spinner {
+            width: 44px;
+            height: 44px;
+            border: 3px solid rgba(220, 38, 38, 0.18);
+            border-top: 3px solid #dc2626;
+            border-right: 3px solid #dc2626;
+            border-radius: 50%;
+            animation: dr-spin 0.85s cubic-bezier(0.5, 0.1, 0.4, 0.9) infinite;
+          }
+        </style>
+        <div class="dr-spinner"></div>
+      </div>
+    </div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="DieselRoom.Api/DieselRoom.Api.csproj" />
+  <Project Path="DieselRoom.Domain/DieselRoom.Domain.csproj" />
+  <Project Path="DieselRoom.Infrastructure/DieselRoom.Infrastructure.csproj" />
+  <Project Path="DieselRoom.Tests/DieselRoom.Tests.csproj" />
+</Solution>

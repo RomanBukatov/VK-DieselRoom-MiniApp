@@ -1,0 +1,12 @@
+# Исключение автосгенерированных файлов миграций EF Core из статистики Linguist
+PokerClub.Infrastructure/Migrations/* linguist-generated=true
+*.Designer.cs linguist-generated=true
+*ModelSnapshot.cs linguist-generated=true
+
+# Лок-файлы пакетов
+package-lock.json linguist-generated=true
+bun.lock linguist-generated=true
+
+# Bat-файлы — только с CRLF, sh — только с LF (иначе не запустятся)
+*.bat text eol=crlf
+*.sh text eol=lf

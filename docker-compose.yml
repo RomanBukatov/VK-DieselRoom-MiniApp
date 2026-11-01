@@ -1,0 +1,91 @@
+# DIESEL ROOM — VK Mini App программы лояльности.
+# Порты отличаются от Monte Carlo (5439 / 5052 / 3000), чтобы оба проекта можно было запускать на одной машине:
+#   PostgreSQL 127.0.0.1:5449 · API 127.0.0.1:5062 · клиент (nginx) 127.0.0.1:3010
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "20m"
+    max-file: "5"
+
+services:
+  diesel-db:
+    image: postgres:16-alpine
+    container_name: diesel_postgres_db
+    restart: always
+    logging: *default-logging
+    mem_limit: 400m
+    environment:
+      POSTGRES_USER: ${DB_USER:-diesel_admin}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Задайте DB_PASSWORD в .env}
+      POSTGRES_DB: ${DB_NAME:-diesel_room_db}
+    ports:
+      # Только локальный интерфейс: БД не должна быть доступна из интернета
+      - "127.0.0.1:${DB_PORT:-5449}:5432"
+    volumes:
+      - diesel_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-diesel_admin} -d ${DB_NAME:-diesel_room_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - diesel-network
+
+  diesel-api:
+    build:
+      context: .
+      dockerfile: DieselRoom.Api/Dockerfile
+    container_name: diesel_backend_api
+    restart: always
+    logging: *default-logging
+    mem_limit: 700m
+    depends_on:
+      diesel-db:
+        condition: service_healthy
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - ASPNETCORE_URLS=http://+:5062
+      # Проверка подписи параметров запуска VK включена явно
+      - VkOptions__RequireValidation=true
+      - VK_APP_ID=${VK_APP_ID:-0}
+      - VK_GROUP_ID=${VK_GROUP_ID:-34613849}
+      - VK_PROTECTED_KEY=${VK_PROTECTED_KEY:-}
+      - VK_COMMUNITY_TOKEN=${VK_COMMUNITY_TOKEN:-}
+      - VK_CALLBACK_CONFIRMATION_CODE=${VK_CALLBACK_CONFIRMATION_CODE:-}
+      - VK_CALLBACK_SECRET_KEY=${VK_CALLBACK_SECRET_KEY:-}
+      # Администраторы (Стас, Фёдор) и сотрудники по VK ID — через запятую
+      - VK_ADMIN_IDS=${VK_ADMIN_IDS:-}
+      - VK_STAFF_IDS=${VK_STAFF_IDS:-}
+      # Мастер-ключ администратора (не короче 12 символов; пусто — вход по ключу выключен) и «перец» ПИН-кодов
+      - DIESEL_MASTER_KEY=${DIESEL_MASTER_KEY:-}
+      - DIESEL_PIN_PEPPER=${DIESEL_PIN_PEPPER:?Задайте DIESEL_PIN_PEPPER в .env}
+      - ConnectionStrings__DefaultConnection=Host=diesel-db;Port=5432;Database=${DB_NAME:-diesel_room_db};Username=${DB_USER:-diesel_admin};Password=${DB_PASSWORD}
+    ports:
+      # Наружу API доступен только через nginx клиента / хоста
+      - "127.0.0.1:${API_PORT:-5062}:5062"
+    networks:
+      - diesel-network
+
+  diesel-client:
+    build:
+      context: ./diesel-client
+      dockerfile: Dockerfile
+      args:
+        VITE_VK_APP_URL: ${VITE_VK_APP_URL:-}
+    container_name: diesel_frontend_client
+    restart: always
+    logging: *default-logging
+    depends_on:
+      - diesel-api
+    ports:
+      # Хостовый nginx (TLS) проксирует на 127.0.0.1:3010
+      - "127.0.0.1:${CLIENT_PORT:-3010}:80"
+    networks:
+      - diesel-network
+
+volumes:
+  diesel_pgdata:
+
+networks:
+  diesel-network:
+    driver: bridge
