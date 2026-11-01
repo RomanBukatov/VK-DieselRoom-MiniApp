@@ -1,0 +1,7 @@
+# Тестовые значения в DieselRoom.Tests (подпись VK, ПИН-коды, мастер-ключ для тестов) заведомо ненастоящие
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Фиктивные секреты юнит- и интеграционных тестов"
+paths = ['''DieselRoom\.Tests/.*''', '''diesel-client/src/.*\.test\.ts''']

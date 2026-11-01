@@ -1,0 +1,64 @@
+# =========================
+# .NET Core / Visual Studio
+# =========================
+bin/
+obj/
+TestResults/
+*.user
+*.suo
+*.userprefs
+*.sln.docstates
+.vs/
+.vscode/
+
+# СЕКРЕТЫ БЭКЕНДА (ОЧЕНЬ ВАЖНО ДЛЯ ПУБЛИЧНОЙ РЕПЫ)
+appsettings.Development.json
+appsettings.Production.json
+secrets.json
+
+# =========================
+# React / Vite / Node.js
+# =========================
+node_modules/
+dist/
+build/
+.npm/
+.eslintcache
+.stylelintcache
+
+# СЕКРЕТЫ (.env с ключами VK, паролями и мастер-ключом в репозиторий не попадает никогда)
+.env
+.env.*
+!.env.example
+*.pfx
+*.pem
+*.key
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# =========================
+# OS Files
+# =========================
+.DS_Store
+Thumbs.db
+
+# =========================
+# Test Artifacts & Screenshots (Playwright, E2E)
+# =========================
+/*.png
+/*.jpg
+/*.jpeg
+/*.webp
+/*.pdf
+/*.webm
+test-results/
+playwright-report/
+blob-report/
+playwright/.cache/
+screenshots/
+
+# Настольный клиент: результат сборки и файлы для раздачи (в репозиторий не кладём, выкладываются на сервер скриптом)
+publish-win/
+/downloads/
