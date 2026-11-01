@@ -57,7 +57,7 @@ test-results/
 playwright-report/
 blob-report/
 playwright/.cache/
-screenshots/
+/screenshots/
 
 # Настольный клиент: результат сборки и файлы для раздачи (в репозиторий не кладём, выкладываются на сервер скриптом)
 publish-win/
