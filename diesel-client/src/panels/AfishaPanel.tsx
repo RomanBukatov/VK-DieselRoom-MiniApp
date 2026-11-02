@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { ChevronRight, ExternalLink, MapPin, Phone, Play } from 'lucide-react';
 import { Button, Card, Empty, ErrorLine, SectionTitle, Spinner } from '../components/ui';
 import { AntWatermark } from '../components/Brand';
+import { KeyIcon } from '../components/Icon';
 import { BookingSheet } from './BookingSheet';
 import { guestApi } from '../api/endpoints';
 import { useSwr } from '../store/useSwr';
@@ -67,8 +68,10 @@ export const AfishaPanel: React.FC = () => {
                 onClick={() => isSafeUrl(m.url) && openExternalUrl(m.url)}
                 className="rounded-2xl bg-dr-card border border-dr-border px-2 py-3 flex flex-col items-center gap-1.5 active:scale-[0.97] transition"
               >
-                <span className="text-2xl" aria-hidden="true">{m.emoji}</span>
-                <span className="text-[11px] font-bold text-center leading-tight">{m.title}</span>
+                <span className="w-10 h-10 rounded-xl bg-dr-red/10 border border-dr-red/40 flex items-center justify-center text-dr-red-light">
+                  <KeyIcon name={m.icon} className="w-5 h-5" />
+                </span>
+                <span className="text-[11px] font-black uppercase tracking-wide text-center leading-tight">{m.title}</span>
               </button>
             ))}
           </div>

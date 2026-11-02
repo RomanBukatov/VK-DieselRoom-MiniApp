@@ -69,6 +69,7 @@ public class ShopService
             Code = await GenerateUniqueCodeAsync(ct),
             Title = item.Title,
             Icon = item.Icon,
+            ImageUrl = item.ImageUrl,
             PriceCoins = item.PriceCoins,
             Status = ShopOrderStatus.Pending,
             CreatedAt = now,
@@ -197,7 +198,7 @@ public class ShopService
         if (changed != 1) return OpResult<ShopOrder>.Fail("Купон уже закрыт.", 409);
 
         var guest = await _db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == order.UserId, ct);
-        StaffAudit.Add(_db, staff, StaffAuditActions.GiftIssued, guest, details: $"{order.Icon} {order.Title} · #{order.Code}", now: now);
+        StaffAudit.Add(_db, staff, StaffAuditActions.GiftIssued, guest, details: $"{order.Title} · #{order.Code}", now: now);
         await _db.SaveChangesAsync(ct);
         await tx.CommitAsync(ct);
 

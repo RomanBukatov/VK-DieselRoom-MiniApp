@@ -1,54 +1,48 @@
 import React from 'react';
+import clsx from 'clsx';
+import { KeyIcon } from './Icon';
+import { BRAND_ASSETS } from '../config/brand';
 
-/**
- * Красный Муравей 🐜 — маскот DIESEL ROOM. Векторный: голова, грудь и брюшко, шесть лапок и усики.
- * Используется на иконке валюты, бейджах уровней и водяным знаком на карточках.
- */
-export const AntMascot: React.FC<{ className?: string; color?: string; title?: string }> = ({ className, color = '#DC2626', title }) => (
-  <svg viewBox="0 0 64 64" className={className} role={title ? 'img' : undefined} aria-hidden={title ? undefined : true} aria-label={title}>
-    <g fill="none" stroke={color} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-      {/* усики */}
-      <path d="M27 14 C24 8 20 6 16 6" />
-      <path d="M37 14 C40 8 44 6 48 6" />
-      {/* лапки */}
-      <path d="M27 29 L16 24 L10 28" />
-      <path d="M37 29 L48 24 L54 28" />
-      <path d="M27 33 L15 34 L9 40" />
-      <path d="M37 33 L49 34 L55 40" />
-      <path d="M28 37 L19 45 L16 54" />
-      <path d="M36 37 L45 45 L48 54" />
-    </g>
-    <g fill={color}>
-      <ellipse cx="32" cy="17" rx="6.5" ry="6" />
-      <ellipse cx="32" cy="31" rx="5.5" ry="7" />
-      <ellipse cx="32" cy="48" rx="9" ry="11" />
-    </g>
-    {/* блики — «металлический» индустриальный акцент */}
-    <g fill="#ffffff" opacity="0.35">
-      <ellipse cx="29.5" cy="15" rx="1.6" ry="1.2" />
-      <ellipse cx="28.5" cy="44" rx="2.4" ry="3.2" />
-    </g>
-  </svg>
+/** Красный Муравей — фирменный маскот DIESEL ROOM. */
+export const AntMascot: React.FC<{ className?: string; white?: boolean; title?: string }> = ({ className, white, title }) => (
+  <img
+    src={white ? BRAND_ASSETS.antWhite : BRAND_ASSETS.ant}
+    alt={title ?? ''}
+    aria-hidden={title ? undefined : true}
+    className={clsx('object-contain select-none', className)}
+    draggable={false}
+  />
 );
 
-/** Логотип-надпись DIESEL ROOM с муравьём. */
-export const Logo: React.FC<{ compact?: boolean }> = ({ compact }) => (
-  <div className="flex items-center gap-1.5 select-none" aria-label="DIESEL ROOM">
-    <AntMascot className={compact ? 'w-6 h-6' : 'w-7 h-7'} />
-    <span className={`font-black tracking-[0.14em] leading-none ${compact ? 'text-sm' : 'text-base'}`}>
-      <span className="text-white">DIESEL</span> <span className="text-dr-red-light">ROOM</span>
-    </span>
-  </div>
+/** Логотип DIESEL ROOM. */
+export const Logo: React.FC<{ className?: string }> = ({ className = 'h-9' }) => (
+  <img src={BRAND_ASSETS.logo} alt="DIESEL ROOM" className={clsx('w-auto object-contain select-none', className)} draggable={false} />
 );
 
-/** Иконка валюты «Баллы Diesel Room»: красная монета с муравьём. */
+/** Иконка валюты «Баллы Diesel Room»: красная монета с белым муравьём. */
 export const CoinIcon: React.FC<{ className?: string }> = ({ className = 'w-4 h-4' }) => (
-  <span className={`inline-flex items-center justify-center rounded-full bg-dr-red shadow-dr-glow ${className}`} aria-hidden="true">
-    <AntMascot className="w-[70%] h-[70%]" color="#ffffff" />
+  <span className={clsx('inline-flex items-center justify-center rounded-full bg-dr-red ring-1 ring-white/15 shrink-0', className)} aria-hidden="true">
+    <AntMascot white className="w-[78%]" />
   </span>
 );
 
-/** Водяной знак: полупрозрачный муравей в углу карточки. */
+/** Водяной знак: полупрозрачный муравей на фоне карточки. */
 export const AntWatermark: React.FC<{ className?: string }> = ({ className = '' }) => (
-  <AntMascot className={`pointer-events-none absolute opacity-[0.07] ${className}`} color="#ffffff" />
+  <AntMascot white className={clsx('pointer-events-none absolute opacity-[0.06]', className)} />
 );
+
+/**
+ * Превью подарка: фото блюда из меню, а если фото нет — брендированная заглушка
+ * (графитовый фон, штриховка, водяной знак-муравей и векторная иконка).
+ */
+export const PrizeVisual: React.FC<{ icon: string; imageUrl?: string | null; title: string; className?: string }> = ({ icon, imageUrl, title, className }) =>
+  imageUrl ? (
+    <img src={imageUrl} alt={title} loading="lazy" className={clsx('w-full aspect-[4/3] object-cover', className)} />
+  ) : (
+    <div className={clsx('relative w-full aspect-[4/3] overflow-hidden bg-gradient-to-br from-[#1f1f24] via-dr-card to-dr-bg dr-hatch flex items-center justify-center', className)}>
+      <AntMascot white className="absolute -right-4 -bottom-2 w-28 opacity-[0.07]" />
+      <span className="relative w-14 h-14 rounded-2xl border border-dr-red/50 bg-dr-red/10 flex items-center justify-center text-dr-red-light">
+        <KeyIcon name={icon} className="w-7 h-7" />
+      </span>
+    </div>
+  );

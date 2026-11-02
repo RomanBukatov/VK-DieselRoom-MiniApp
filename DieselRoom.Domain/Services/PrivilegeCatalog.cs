@@ -11,7 +11,7 @@ public sealed record PrivilegeInfo(
     PrivilegeTier Tier,
     int TopRank,
     int BottomRank,
-    string Emoji,
+    string Icon,
     string Title,
     string Conditions,
     int? Limit,
@@ -20,7 +20,7 @@ public sealed record PrivilegeInfo(
     TimeOnly? From = null,
     TimeOnly? To = null)
 {
-    public string Label => $"{Emoji} {Title}";
+    public string Label => Title;
 }
 
 /// <summary>Результат проверки «можно ли выдать привилегию сейчас».</summary>
@@ -33,16 +33,16 @@ public static class PrivilegeCatalog
 
     public static readonly IReadOnlyList<PrivilegeInfo> All =
     [
-        new(PrivilegeTier.BusinessLunch, 1, 1, "🍱", "Бизнес-ланч бесплатно",
+        new(PrivilegeTier.BusinessLunch, 1, 1, "lunch", "Бизнес-ланч бесплатно",
             "до 3 раз в неделю, Пн–Пт 12:00–16:00", 3, 1, Weekdays, new TimeOnly(12, 0), new TimeOnly(16, 0)),
-        new(PrivilegeTier.UnlimitedCoffee, 2, 2, "☕", "Безлимитный кофе",
+        new(PrivilegeTier.UnlimitedCoffee, 2, 2, "coffee", "Безлимитный кофе",
             "активен, пока вы на 2-м месте!", null, 1),
-        new(PrivilegeTier.Hookah, 3, 3, "💨", "Бесплатный кальян",
+        new(PrivilegeTier.Hookah, 3, 3, "hookah", "Бесплатный кальян",
             "1 раз в неделю, Пт/Сб", 1, 1, [DayOfWeek.Friday, DayOfWeek.Saturday]),
-        new(PrivilegeTier.Dessert, 4, 10, "🍰", "Десерт от заведения", "1 раз в неделю", 1, 1),
-        new(PrivilegeTier.BeerOrCoffee, 11, 20, "🍺", "Бокал пива 0.5 или кофе", "1 раз в неделю", 1, 1),
-        new(PrivilegeTier.TeaPot, 21, 30, "🫖", "Чайник чая", "1 раз в неделю", 1, 1),
-        new(PrivilegeTier.Cocktail, 31, 50, "🍹", "Коктейль от бара", "1 раз в 2 недели", 1, 2),
+        new(PrivilegeTier.Dessert, 4, 10, "dessert", "Десерт от заведения", "1 раз в неделю", 1, 1),
+        new(PrivilegeTier.BeerOrCoffee, 11, 20, "beer", "Бокал пива 0.5 или кофе", "1 раз в неделю", 1, 1),
+        new(PrivilegeTier.TeaPot, 21, 30, "tea", "Чайник чая", "1 раз в неделю", 1, 1),
+        new(PrivilegeTier.Cocktail, 31, 50, "cocktail", "Коктейль от бара", "1 раз в 2 недели", 1, 2),
     ];
 
     /// <summary>Призовые места заканчиваются на 50-м.</summary>
@@ -51,7 +51,7 @@ public static class PrivilegeCatalog
     /// <summary>Спецприз за удержание 1-го места 7 дней подряд.</summary>
     public const int FirstPlaceStreakTarget = 7;
     public const string FirstPlaceStreakPrizeTitle = "Бутылка Хаски 0.5";
-    public const string FirstPlaceStreakPrizeIcon = "🥃";
+    public const string FirstPlaceStreakPrizeIcon = "bottle";
 
     public static PrivilegeTier TierForRank(int? rank)
     {

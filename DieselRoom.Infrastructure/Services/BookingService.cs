@@ -176,22 +176,22 @@ public class BookingService
 
     public static string StatusLabel(BookingStatus status) => status switch
     {
-        BookingStatus.Pending => "⏳ Ожидает подтверждения",
-        BookingStatus.Confirmed => "✅ Подтверждено",
-        BookingStatus.Rejected => "✕ Отклонено",
+        BookingStatus.Pending => "Ожидает подтверждения",
+        BookingStatus.Confirmed => "Подтверждено",
+        BookingStatus.Rejected => "Отклонено",
         BookingStatus.Completed => "Посетил",
         BookingStatus.Cancelled => "Отменено гостем",
         _ => status.ToString(),
     };
 
     public static string BuildConfirmedMessage(Booking b) =>
-        $"✅ Ваша бронь в DIESEL ROOM подтверждена!\n" +
-        $"📅 {b.Date:dd.MM.yyyy} в {b.Time:HH\\:mm} · гостей: {b.GuestsCount} · {FormatLabel(b.Format)}\n" +
-        (b.StaffComment != null ? $"💬 {b.StaffComment}\n" : string.Empty) +
-        $"Ждём вас: {VenueAddress}. Телефон: {VenuePhone}. 🐜";
+        $"Ваша бронь в DIESEL ROOM подтверждена.\n" +
+        $"{b.Date:dd.MM.yyyy} в {b.Time:HH\\:mm} · гостей: {b.GuestsCount} · {FormatLabel(b.Format)}\n" +
+        (b.StaffComment != null ? $"Комментарий: {b.StaffComment}\n" : string.Empty) +
+        $"Ждём вас: {VenueAddress}. Телефон: {VenuePhone}.";
 
     public static string BuildRejectedMessage(Booking b) =>
-        $"✕ К сожалению, не получается подтвердить бронь на {b.Date:dd.MM.yyyy} в {b.Time:HH\\:mm}.\n" +
-        (b.StaffComment != null ? $"💬 {b.StaffComment}\n" : string.Empty) +
+        $"К сожалению, не получается подтвердить бронь на {b.Date:dd.MM.yyyy} в {b.Time:HH\\:mm}.\n" +
+        (b.StaffComment != null ? $"Комментарий: {b.StaffComment}\n" : string.Empty) +
         $"Позвоните нам — подберём другое время: {VenuePhone}.";
 }

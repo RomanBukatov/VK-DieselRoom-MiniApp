@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { QrCode as QrIcon } from 'lucide-react';
+import { Flame, QrCode as QrIcon } from 'lucide-react';
+import { KeyIcon } from '../../components/Icon';
 import { Card, Pill, Sheet } from '../../components/ui';
 import { AntMascot, CoinIcon } from '../../components/Brand';
 import { QrCode } from '../../components/QrCode';
-import { streakText, usageText } from '../../domain/privileges';
+import { STREAK_PRIZE, streakText, usageText } from '../../domain/privileges';
 import type { Profile } from '../../types';
 
 /** Кошелёк баллов, очки рейтинга и текущая привилегия по месту в «Гонке недели». */
@@ -21,7 +22,7 @@ export const WalletCard: React.FC<{ profile: Profile }> = ({ profile }) => {
               <img src={profile.photoUrl} alt="" className="w-12 h-12 rounded-full object-cover border-2 border-dr-red/60" />
             ) : (
               <span className="w-12 h-12 rounded-full bg-dr-surface border-2 border-dr-red/60 flex items-center justify-center">
-                <AntMascot className="w-7 h-7" />
+                <AntMascot className="w-9" />
               </span>
             )}
             <div className="min-w-0">
@@ -51,7 +52,12 @@ export const WalletCard: React.FC<{ profile: Profile }> = ({ profile }) => {
         <div className="text-[11px] uppercase tracking-wider text-dr-muted">Привилегия недели</div>
         {p.label ? (
           <>
-            <div className="text-base font-black mt-1">{p.label}</div>
+            <div className="text-base font-black mt-1 flex items-center gap-2">
+              <span className="w-8 h-8 rounded-lg bg-dr-red/10 border border-dr-red/40 flex items-center justify-center text-dr-red-light shrink-0">
+                <KeyIcon name={p.icon} className="w-4 h-4" />
+              </span>
+              {p.label}
+            </div>
             <div className="text-xs text-dr-muted mt-0.5">
               {p.rank}-е место · {p.conditions}
             </div>
@@ -60,7 +66,11 @@ export const WalletCard: React.FC<{ profile: Profile }> = ({ profile }) => {
               {usageText(p) && <Pill>{usageText(p)}</Pill>}
             </div>
             {!p.allowed && p.reason && <div className="text-[11px] text-dr-muted mt-1.5">{p.reason}</div>}
-            {streak && <div className="mt-2 text-xs font-bold text-amber-300">{streak} → спецприз 🥃 Бутылка Хаски 0.5</div>}
+            {streak && (
+              <div className="mt-2 text-xs font-bold text-amber-300 flex items-center gap-1">
+                <Flame className="w-3.5 h-3.5 shrink-0" /> {streak} → спецприз «{STREAK_PRIZE}»
+              </div>
+            )}
             <div className="text-[11px] text-dr-muted mt-2">Назовите официанту номер карты — привилегия проверяется по текущему месту.</div>
           </>
         ) : (

@@ -62,7 +62,7 @@ export class RootErrorBoundary extends Component<{ children: ReactNode }, { erro
     if (!this.state.error) return this.props.children;
     return (
       <div className="min-h-screen bg-dr-bg flex flex-col items-center justify-center gap-4 p-6 text-center">
-        <AntMascot className="w-16 h-16" />
+        <AntMascot className="w-28" />
         <div className="dr-title">Что-то пошло не так</div>
         <p className="text-sm text-dr-muted">Попробуйте перезапустить приложение.</p>
         <button type="button" className="dr-red-btn rounded-xl px-5 py-3" onClick={this.resetAndReload}>

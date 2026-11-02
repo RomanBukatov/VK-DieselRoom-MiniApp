@@ -113,12 +113,12 @@ public class VisitService
             receipt, guest.Id, staff.Name, referralPaid);
 
         _notifier.Send(fresh.VkId,
-            $"🧾 Спасибо за визит в DIESEL ROOM! +{rates.VisitCoins} баллов и +{rates.VisitRating} в рейтинг. " +
-            $"Баланс: {fresh.DieselCoinsBalance} баллов. 🐜", $"визит {receipt}");
+            $"Спасибо за визит в DIESEL ROOM! +{rates.VisitCoins} баллов и +{rates.VisitRating} в рейтинг. " +
+            $"Баланс: {fresh.DieselCoinsBalance} баллов.", $"визит {receipt}");
         if (referralPaid)
         {
             _notifier.Send(inviter!.VkId,
-                $"🤝 Ваш друг {guest.FirstName} впервые посетил DIESEL ROOM! Вам начислено +{rates.ReferralCoins} баллов " +
+                $"Ваш друг {guest.FirstName} впервые посетил DIESEL ROOM! Вам начислено +{rates.ReferralCoins} баллов " +
                 $"и +{rates.ReferralRating} в рейтинг.", $"реферальный бонус за {guest.Id}");
         }
 

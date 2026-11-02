@@ -22,3 +22,10 @@ export const BRAND = {
     muted: '#A1A1AA',
   },
 } as const;
+
+/** Оригинальные файлы бренда (оптимизированы под мобильный экран, лежат в public/brand). */
+export const BRAND_ASSETS = {
+  logo: '/brand/logo.webp',
+  ant: '/brand/ant.png',
+  antWhite: '/brand/ant-white.png',
+} as const;

@@ -67,7 +67,7 @@ const GuestHeader: React.FC<{ guest: GuestCard }> = ({ guest }) => (
   </div>
 );
 
-/** 🎁 Выдача подарка по купону #DR-XXXX или привилегии ранга с проверкой недельного лимита. */
+/** Выдача подарка по купону #DR-XXXX или привилегии ранга с проверкой недельного лимита. */
 export const IssueTool: React.FC = () => {
   const showToast = useApp((s) => s.showToast);
   const lookup = useLookup();
@@ -79,7 +79,7 @@ export const IssueTool: React.FC = () => {
     try {
       await staffApi.issueCoupon(code);
       triggerHaptic('heavy');
-      showToast(`✅ Купон ${displayCode(code)} погашен — подарок выдан.`);
+      showToast(`Купон ${displayCode(code)} погашен — подарок выдан.`);
       await lookup.search();
     } catch (e) {
       showToast(apiErrorMessage(e), 'error');
@@ -93,7 +93,7 @@ export const IssueTool: React.FC = () => {
     try {
       const updated = await staffApi.redeemPrivilege(guest.userId);
       triggerHaptic('heavy');
-      showToast(`✅ ${guest.privilege.label} — выдача записана в журнал.`);
+      showToast(`${guest.privilege.label} — выдача записана в журнал.`);
       lookup.setResult((r) => (r ? { ...r, guests: r.guests.map((g) => (g.userId === updated.userId ? updated : g)) } : r));
     } catch (e) {
       showToast(apiErrorMessage(e), 'error');
@@ -120,7 +120,7 @@ export const IssueTool: React.FC = () => {
         <Card glow={order.order.status === 'Pending'}>
           <div className="text-[11px] uppercase tracking-wider text-dr-muted">Подарок из магазина</div>
           <div className="text-lg font-black mt-1">
-            {order.order.icon} {order.order.title}
+            {order.order.title}
           </div>
           <div className="text-xs text-dr-muted">
             {displayCode(order.order.code)} · {order.guestName} (карта {order.cardNumber})
@@ -175,7 +175,7 @@ const VISIT_TYPES: { value: VisitType; label: string }[] = [
   { value: 'PartyKaraoke', label: 'Вечеринка / Караоке' },
 ];
 
-/** 🧾 Начисление за визит: гость + номер закрытого чека (1 чек = 1 раз) + тип визита. */
+/** Начисление за визит: гость + номер закрытого чека (1 чек = 1 раз) + тип визита. */
 export const VisitTool: React.FC = () => {
   const showToast = useApp((s) => s.showToast);
   const lookup = useLookup();
@@ -193,7 +193,7 @@ export const VisitTool: React.FC = () => {
       const r = await staffApi.accrueVisit(guest.userId, receipt, type);
       triggerHaptic('heavy');
       showToast(
-        `✅ Чек №${r.receiptNumber}: ${r.guest.name} +${r.coinsAwarded} баллов, +${r.ratingAwarded} в рейтинг` +
+        `Чек №${r.receiptNumber}: ${r.guest.name} +${r.coinsAwarded} баллов, +${r.ratingAwarded} в рейтинг` +
           (r.referralRewardPaid ? `. Бонус за друга получил ${r.inviterName}!` : '.'),
       );
       setGuest(r.guest);
@@ -261,7 +261,7 @@ export const VisitTool: React.FC = () => {
   );
 };
 
-/** 📅 Заявки на бронь с кнопками «✅ Подтвердить» и «✕ Отклонить». */
+/** Заявки на бронь с кнопками «Подтвердить» и «Отклонить». */
 export const BookingsTool: React.FC = () => {
   const showToast = useApp((s) => s.showToast);
   const [filter, setFilter] = useState<BookingStatus | 'Active'>('Active');
@@ -293,7 +293,7 @@ export const BookingsTool: React.FC = () => {
       if (action === 'confirm') await staffApi.confirmBooking(id, comments[id]);
       if (action === 'reject') await staffApi.rejectBooking(id, comments[id]);
       if (action === 'complete') await staffApi.completeBooking(id);
-      showToast(action === 'confirm' ? '✅ Бронь подтверждена — гостю ушло сообщение.' : action === 'reject' ? '✕ Бронь отклонена — гостю ушло сообщение.' : 'Отмечено: гость посетил.');
+      showToast(action === 'confirm' ? 'Бронь подтверждена — гостю ушло сообщение.' : action === 'reject' ? 'Бронь отклонена — гостю ушло сообщение.' : 'Отмечено: гость посетил.');
       setVersion((v) => v + 1);
     } catch (e) {
       showToast(apiErrorMessage(e), 'error');
@@ -344,7 +344,7 @@ export const BookingsTool: React.FC = () => {
                   {formatPhone(b.phone)}
                 </a>
               </div>
-              {b.wishes && <div className="text-[11px] mt-0.5">💬 {b.wishes}</div>}
+              {b.wishes && <div className="text-[11px] mt-0.5">Пожелания: {b.wishes}</div>}
               {b.processedByStaffName && <div className="text-[10px] text-dr-muted mt-0.5">Обработал: {b.processedByStaffName}</div>}
             </div>
             <Pill tone={b.status === 'Confirmed' ? 'green' : b.status === 'Pending' ? 'amber' : 'muted'}>{b.statusLabel}</Pill>
@@ -360,10 +360,10 @@ export const BookingsTool: React.FC = () => {
               />
               <div className="grid grid-cols-2 gap-2 mt-2">
                 <Button size="sm" disabled={busyId === b.id} onClick={() => act(b.id, 'confirm')}>
-                  ✅ Подтвердить
+                  <Check className="w-4 h-4" /> Подтвердить
                 </Button>
                 <Button size="sm" variant="dark" disabled={busyId === b.id} onClick={() => act(b.id, 'reject')}>
-                  ✕ Отклонить
+                  <X className="w-4 h-4" /> Отклонить
                 </Button>
               </div>
             </>

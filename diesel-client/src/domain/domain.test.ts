@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import { TIERS, rankBadge, streakText, tierForRank, usageText } from './privileges';
+import { TIERS, rankTone, streakText, tierForRank, usageText } from './privileges';
 import { displayCode, giftsTabOf, groupOrders, normalizeOrderCode, orderStatusLabel } from './orders';
 import { bookingMomentUtc, canGuestCancel, normalizePhone, validateBooking, type BookingForm } from './booking';
 import { isSafeUrl, visibleMenu } from './afisha';
@@ -30,13 +30,17 @@ describe('Привилегии «Гонки недели» (ТЗ п. 4.1)', () =
     expect(TIERS).toHaveLength(7);
   });
 
-  it('значки мест', () => {
-    expect([rankBadge(1), rankBadge(2), rankBadge(3), rankBadge(7), rankBadge(15), rankBadge(25), rankBadge(40), rankBadge(60)])
-      .toEqual(['🥇', '🥈', '🥉', '🟢', '🟡', '🔵', '⚪', '']);
+  it('цвет маркера места: подиум и тиры, вне топ-50 — без маркера', () => {
+    expect([rankTone(1), rankTone(2), rankTone(3), rankTone(7), rankTone(15), rankTone(25), rankTone(40), rankTone(60)])
+      .toEqual(['gold', 'silver', 'bronze', 'red', 'amber', 'steel', 'muted', null]);
+  });
+
+  it('у тиров — ключи векторных иконок, а не эмодзи', () => {
+    for (const t of TIERS) expect(t.icon).toMatch(/^[a-z-]+$/);
   });
 
   it('трекер удержания 1-го места — только у лидера', () => {
-    expect(streakText({ rank: 1, firstPlaceStreak: 4, streakTarget: 7 })).toBe('🔥 Удержание 1-го места: 4 / 7 дней подряд');
+    expect(streakText({ rank: 1, firstPlaceStreak: 4, streakTarget: 7 })).toBe('Удержание 1-го места: 4 / 7 дней подряд');
     expect(streakText({ rank: 2, firstPlaceStreak: 4, streakTarget: 7 })).toBeNull();
   });
 
@@ -52,7 +56,8 @@ const order = (patch: Partial<ShopOrder>): ShopOrder => ({
   id: 1,
   code: 'DR-AB3K',
   title: 'Кофе',
-  icon: '☕',
+  icon: 'coffee',
+  imageUrl: null,
   priceCoins: 60,
   status: 'Pending',
   createdAt: '2026-11-04T10:00:00.000Z',
@@ -148,7 +153,7 @@ describe('Бронирование', () => {
 
 describe('Меню и ссылки', () => {
   const link = (patch: Partial<MenuLink>): MenuLink => ({
-    id: 1, key: 'k', emoji: '🍽', title: 'Меню', url: 'https://vk.ru/a', hiddenAfter: null, isActive: true, sortOrder: 0, ...patch,
+    id: 1, key: 'k', icon: 'utensils', title: 'Меню', url: 'https://vk.ru/a', hiddenAfter: null, isActive: true, sortOrder: 0, ...patch,
   });
 
   it('банкетное меню скрывается после 31.12.2026 23:59:59 по Перми', () => {

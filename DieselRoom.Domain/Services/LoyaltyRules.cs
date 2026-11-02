@@ -119,7 +119,7 @@ public static class Codes
 }
 
 /// <summary>Достижения гостя: вычисляются из статистики, отдельной таблицы не требуют.</summary>
-public sealed record Achievement(string Key, string Emoji, string Title, string Description, bool Unlocked, int Progress, int Target);
+public sealed record Achievement(string Key, string Icon, string Title, string Description, bool Unlocked, int Progress, int Target);
 
 public static class Achievements
 {
@@ -127,12 +127,12 @@ public static class Achievements
     {
         return
         [
-            new("first_visit", "🚪", "Первый визит", "Первый визит по чеку", visits >= 1, Math.Min(visits, 1), 1),
-            new("visits_5", "🔥", "5 посещений", "5 визитов по чекам", visits >= 5, Math.Min(visits, 5), 5),
-            new("visits_10", "🐜", "Свой в Diesel Room", "10 визитов по чекам", visits >= 10, Math.Min(visits, 10), 10),
-            new("first_friend", "🤝", "Привёл друга", "Друг пришёл по вашей ссылке", paidReferrals >= 1, Math.Min(paidReferrals, 1), 1),
-            new("first_gift", "🎁", "Первый подарок", "Получили подарок из магазина", giftsReceived >= 1, Math.Min(giftsReceived, 1), 1),
-            new("podium", "🏆", "Пьедестал", "Топ-3 недельной гонки", bestWeeklyRank is >= 1 and <= 3, bestWeeklyRank is >= 1 and <= 3 ? 1 : 0, 1),
+            new("first_visit", "door", "Первый визит", "Первый визит по чеку", visits >= 1, Math.Min(visits, 1), 1),
+            new("visits_5", "flame", "5 посещений", "5 визитов по чекам", visits >= 5, Math.Min(visits, 5), 5),
+            new("visits_10", "ant", "Свой в Diesel Room", "10 визитов по чекам", visits >= 10, Math.Min(visits, 10), 10),
+            new("first_friend", "users", "Привёл друга", "Друг пришёл по вашей ссылке", paidReferrals >= 1, Math.Min(paidReferrals, 1), 1),
+            new("first_gift", "gift", "Первый подарок", "Получили подарок из магазина", giftsReceived >= 1, Math.Min(giftsReceived, 1), 1),
+            new("podium", "trophy", "Пьедестал", "Топ-3 недельной гонки", bestWeeklyRank is >= 1 and <= 3, bestWeeklyRank is >= 1 and <= 3 ? 1 : 0, 1),
         ];
     }
 }

@@ -1,17 +1,17 @@
 import type { BookingFormat, BookingStatus } from '../types';
 import { PERM_OFFSET_MS, permDateString } from '../utils/format';
 
-export const BOOKING_FORMATS: { value: BookingFormat; label: string; emoji: string }[] = [
-  { value: 'Hall', label: 'Стол в зале', emoji: '🍽' },
-  { value: 'Karaoke', label: 'Караоке', emoji: '🎤' },
-  { value: 'Party', label: 'Вечеринка / Мероприятие', emoji: '🎉' },
-  { value: 'Banquet', label: 'Банкет', emoji: '🥂' },
+export const BOOKING_FORMATS: { value: BookingFormat; label: string }[] = [
+  { value: 'Hall', label: 'Стол в зале' },
+  { value: 'Karaoke', label: 'Караоке' },
+  { value: 'Party', label: 'Вечеринка / Мероприятие' },
+  { value: 'Banquet', label: 'Банкет' },
 ];
 
 export const BOOKING_STATUS_LABELS: Record<BookingStatus, string> = {
-  Pending: '⏳ Ожидает подтверждения',
-  Confirmed: '✅ Подтверждено',
-  Rejected: '✕ Отклонено',
+  Pending: 'Ожидает подтверждения',
+  Confirmed: 'Подтверждено',
+  Rejected: 'Отклонено',
   Completed: 'Посетил',
   Cancelled: 'Отменено гостем',
 };

@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { Copy, Share2 } from 'lucide-react';
+import { Copy, Share2, Users } from 'lucide-react';
+import { KeyIcon } from '../../components/Icon';
+import { AntMascot } from '../../components/Brand';
 import { Button, Card, Empty, ErrorLine, Field, Pill, Sheet, inputClass } from '../../components/ui';
 import { guestApi } from '../../api/endpoints';
 import { apiErrorMessage } from '../../api/client';
@@ -49,7 +51,7 @@ export const MyBookings: React.FC<{ version: number }> = ({ version }) => {
               <div className="text-[11px] text-dr-muted">
                 {formatLabel(b.format)} · гостей: {b.guestsCount}
               </div>
-              {b.staffComment && <div className="text-[11px] text-white/80 mt-0.5">💬 {b.staffComment}</div>}
+              {b.staffComment && <div className="text-[11px] text-white/80 mt-0.5">Комментарий: {b.staffComment}</div>}
             </div>
             <Pill tone={b.status === 'Confirmed' ? 'green' : b.status === 'Pending' ? 'amber' : b.status === 'Rejected' ? 'red' : 'muted'}>
               {b.statusLabel}
@@ -79,7 +81,9 @@ export const ReferralCard: React.FC<{ profile: Profile }> = ({ profile }) => {
 
   return (
     <Card watermark>
-      <div className="text-sm font-bold">🤝 Приведи друга</div>
+      <div className="text-sm font-black uppercase tracking-wide flex items-center gap-2">
+        <Users className="w-4 h-4 text-dr-red-light" /> Приведи друга
+      </div>
       <div className="text-xs text-dr-muted mt-1">{referralRuleText(r.rewardCoins, r.rewardRating)}</div>
       <div className="mt-3 flex items-center gap-2 bg-dr-surface border border-dr-border rounded-xl px-3 py-2">
         <span className="text-xs truncate flex-1">{link}</span>
@@ -111,7 +115,9 @@ export const AchievementsGrid: React.FC<{ profile: Profile }> = ({ profile }) =>
         className={`rounded-2xl border px-2 py-3 text-center ${a.unlocked ? 'bg-dr-red/10 border-dr-red/40' : 'bg-dr-card border-dr-border opacity-60'}`}
         title={a.description}
       >
-        <div className={`text-2xl ${a.unlocked ? '' : 'grayscale'}`}>{a.emoji}</div>
+        <div className={`mx-auto w-10 h-10 rounded-xl border flex items-center justify-center ${a.unlocked ? 'border-dr-red/50 bg-dr-red/15 text-dr-red-light' : 'border-dr-border text-dr-muted'}`}>
+          {a.icon === 'ant' ? <AntMascot white={!a.unlocked} className="w-7" /> : <KeyIcon name={a.icon} className="w-5 h-5" />}
+        </div>
         <div className="text-[11px] font-bold leading-tight mt-1">{a.title}</div>
         <div className="text-[10px] text-dr-muted mt-0.5">{a.unlocked ? 'получено' : `${a.progress} / ${a.target}`}</div>
       </div>

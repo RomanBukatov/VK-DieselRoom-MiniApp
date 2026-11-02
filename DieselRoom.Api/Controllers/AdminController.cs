@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using DieselRoom.Api.DTOs;
 using DieselRoom.Api.Extensions;
 using DieselRoom.Api.Filters;
@@ -43,6 +44,9 @@ public class AdminController : ControllerBase
         StaffAudit.Add(_db, Admin, action, details: details, now: Now);
         await _db.SaveChangesAsync(ct);
     }
+
+    private static bool IsPrizeImagePath(string path) =>
+        Regex.IsMatch(path, @"^/prizes/[a-z0-9-]{1,60}\.(webp|jpg|png)$");
 
     private static string? ValidUrl(string? url) =>
         string.IsNullOrWhiteSpace(url) ? null
@@ -108,7 +112,7 @@ public class AdminController : ControllerBase
         if (string.IsNullOrWhiteSpace(r.Title) || r.Title.Trim().Length > 100) return Error("Название кнопки: от 1 до 100 символов.");
 
         link.Title = r.Title.Trim();
-        link.Emoji = string.IsNullOrWhiteSpace(r.Emoji) ? link.Emoji : r.Emoji.Trim();
+        link.Icon = string.IsNullOrWhiteSpace(r.Icon) ? link.Icon : r.Icon.Trim();
         link.Url = url;
         link.HiddenAfter = r.HiddenAfter.HasValue ? DateTime.SpecifyKind(r.HiddenAfter.Value, DateTimeKind.Utc) : null;
         link.IsActive = r.IsActive;
@@ -186,7 +190,13 @@ public class AdminController : ControllerBase
         if (item == null) return Error("Подарок не найден.", 404);
         item.Title = r.Title.Trim();
         item.Description = string.IsNullOrWhiteSpace(r.Description) ? null : r.Description.Trim();
-        item.Icon = string.IsNullOrWhiteSpace(r.Icon) ? "🎁" : r.Icon.Trim();
+        if (r.Icon is { Length: > 32 }) return Error("Ключ иконки — не длиннее 32 символов.");
+        item.Icon = string.IsNullOrWhiteSpace(r.Icon) ? "gift" : r.Icon.Trim();
+        // Фото — превью из каталога /prizes/ приложения или внешняя https-ссылка
+        var image = r.ImageUrl?.Trim();
+        if (!string.IsNullOrEmpty(image) && !IsPrizeImagePath(image) && ValidUrl(image) == "invalid")
+            return Error("Фото: путь /prizes/<имя>.webp или ссылка https://");
+        item.ImageUrl = string.IsNullOrEmpty(image) ? null : IsPrizeImagePath(image) ? image : ValidUrl(image);
         item.PriceCoins = r.PriceCoins;
         item.StockCount = r.StockCount;
         item.IsActive = r.IsActive;

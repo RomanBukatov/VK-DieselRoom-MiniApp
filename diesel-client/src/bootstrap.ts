@@ -5,7 +5,7 @@ import { captureReferralFromLaunch } from './utils/referral';
 import { markVkMobileClient } from './utils/vkBridge';
 
 migrateOrClearStaleAppCache();
-// Отступ шапки под кнопки «⋯ ✕» мобильного ВК (mobile_* или mobile_web + com.vk.vkclient на iPhone) — до первого рендера
+// Отступ шапки под кнопки «закрыть» и «меню» мобильного ВК (mobile_* или mobile_web + com.vk.vkclient на iPhone) — до первого рендера
 markVkMobileClient();
 // Реферальная ссылка (#ref=100123): запоминаем код друга до первой синхронизации профиля
 captureReferralFromLaunch();

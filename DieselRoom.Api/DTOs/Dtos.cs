@@ -6,11 +6,11 @@ using DieselRoom.Infrastructure.Services;
 namespace DieselRoom.Api.DTOs;
 
 public sealed record PrivilegeDto(
-    PrivilegeTier Tier, string? Emoji, string? Title, string? Conditions, string? Label,
+    PrivilegeTier Tier, string? Icon, string? Title, string? Conditions, string? Label,
     int? Rank, bool Allowed, int Used, int? Limit, string? Reason, int FirstPlaceStreak, int StreakTarget)
 {
     public static PrivilegeDto From(ActivePrivilege p) => new(
-        p.Tier, p.Info?.Emoji, p.Info?.Title, p.Info?.Conditions, p.Info?.Label,
+        p.Tier, p.Info?.Icon, p.Info?.Title, p.Info?.Conditions, p.Info?.Label,
         p.Rank, p.Availability.Allowed, p.Availability.Used, p.Availability.Limit, p.Availability.Reason,
         p.FirstPlaceStreak, PrivilegeCatalog.FirstPlaceStreakTarget);
 }
@@ -31,20 +31,20 @@ public sealed record LeaderboardRowDto(int Rank, int UserId, string Name, string
 public sealed record LeaderboardDto(string Kind, IReadOnlyList<LeaderboardRowDto> Rows, LeaderboardRowDto? Me,
     DateOnly WeekStart, DateTime NextResetAt, IReadOnlyList<PrivilegeInfoDto> Tiers);
 
-public sealed record PrivilegeInfoDto(PrivilegeTier Tier, int TopRank, int BottomRank, string Emoji, string Title, string Conditions)
+public sealed record PrivilegeInfoDto(PrivilegeTier Tier, int TopRank, int BottomRank, string Icon, string Title, string Conditions)
 {
-    public static PrivilegeInfoDto From(PrivilegeInfo i) => new(i.Tier, i.TopRank, i.BottomRank, i.Emoji, i.Title, i.Conditions);
+    public static PrivilegeInfoDto From(PrivilegeInfo i) => new(i.Tier, i.TopRank, i.BottomRank, i.Icon, i.Title, i.Conditions);
 }
 
-public sealed record ShopItemDto(int Id, string Title, string? Description, string Icon, int PriceCoins, int StockCount, bool IsActive, int SortOrder)
+public sealed record ShopItemDto(int Id, string Title, string? Description, string Icon, string? ImageUrl, int PriceCoins, int StockCount, bool IsActive, int SortOrder)
 {
-    public static ShopItemDto From(ShopItem i) => new(i.Id, i.Title, i.Description, i.Icon, i.PriceCoins, i.StockCount, i.IsActive, i.SortOrder);
+    public static ShopItemDto From(ShopItem i) => new(i.Id, i.Title, i.Description, i.Icon, i.ImageUrl, i.PriceCoins, i.StockCount, i.IsActive, i.SortOrder);
 }
 
-public sealed record ShopOrderDto(int Id, string Code, string Title, string Icon, int PriceCoins, ShopOrderStatus Status,
+public sealed record ShopOrderDto(int Id, string Code, string Title, string Icon, string? ImageUrl, int PriceCoins, ShopOrderStatus Status,
     DateTime CreatedAt, DateTime ExpiresAt, DateTime? IssuedAt, DateTime? ClosedAt, bool IsPrize)
 {
-    public static ShopOrderDto From(ShopOrder o) => new(o.Id, o.Code, o.Title, o.Icon, o.PriceCoins, o.Status,
+    public static ShopOrderDto From(ShopOrder o) => new(o.Id, o.Code, o.Title, o.Icon, o.ImageUrl, o.PriceCoins, o.Status,
         o.CreatedAt, o.ExpiresAt, o.IssuedAt, o.ClosedAt, o.ShopItemId == null);
 }
 
@@ -55,9 +55,9 @@ public sealed record BannerDto(int Id, string Title, string? Subtitle, string? L
     public static BannerDto From(PromoBanner b) => new(b.Id, b.Title, b.Subtitle, b.LinkUrl, b.ImageUrl, b.IsActive, b.SortOrder);
 }
 
-public sealed record MenuLinkDto(int Id, string Key, string Emoji, string Title, string Url, DateTime? HiddenAfter, bool IsActive, int SortOrder)
+public sealed record MenuLinkDto(int Id, string Key, string Icon, string Title, string Url, DateTime? HiddenAfter, bool IsActive, int SortOrder)
 {
-    public static MenuLinkDto From(MenuLink m) => new(m.Id, m.Key, m.Emoji, m.Title, m.Url, m.HiddenAfter, m.IsActive, m.SortOrder);
+    public static MenuLinkDto From(MenuLink m) => new(m.Id, m.Key, m.Icon, m.Title, m.Url, m.HiddenAfter, m.IsActive, m.SortOrder);
 }
 
 public sealed record AfishaEventDto(int Id, string Title, string? Tagline, string? Description, string? ProductUrl, string? ImageUrl,
@@ -117,11 +117,11 @@ public sealed record AccrueVisitRequest(int UserId, string? ReceiptNumber, Visit
 
 public sealed record UpsertBannerRequest(string? Title, string? Subtitle, string? LinkUrl, string? ImageUrl, bool IsActive, int SortOrder);
 
-public sealed record UpdateMenuLinkRequest(string? Emoji, string? Title, string? Url, DateTime? HiddenAfter, bool IsActive, int SortOrder);
+public sealed record UpdateMenuLinkRequest(string? Icon, string? Title, string? Url, DateTime? HiddenAfter, bool IsActive, int SortOrder);
 
 public sealed record UpsertAfishaEventRequest(string? Title, string? Tagline, string? Description, string? ProductUrl, string? ImageUrl,
     bool AllowBooking, BookingFormat DefaultFormat, bool IsActive, int SortOrder);
 
-public sealed record UpsertShopItemRequest(string? Title, string? Description, string? Icon, int PriceCoins, int StockCount, bool IsActive, int SortOrder);
+public sealed record UpsertShopItemRequest(string? Title, string? Description, string? Icon, string? ImageUrl, int PriceCoins, int StockCount, bool IsActive, int SortOrder);
 
 public sealed record UpsertStaffMemberRequest(string? Name, StaffRole Role, string? VkId, string? Pin, bool IsActive);

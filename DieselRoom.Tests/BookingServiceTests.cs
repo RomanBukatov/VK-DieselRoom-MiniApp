@@ -23,7 +23,7 @@ public class BookingServiceTests
         Assert.True(result.Ok, result.Error);
         Assert.Equal(BookingStatus.Pending, result.Value!.Status);
         Assert.Equal("79021234567", result.Value.Phone);
-        Assert.Equal("⏳ Ожидает подтверждения", BookingService.StatusLabel(result.Value.Status));
+        Assert.Equal("Ожидает подтверждения", BookingService.StatusLabel(result.Value.Status));
     }
 
     [Theory]

@@ -28,7 +28,7 @@
         }
       })(window);
     </script>
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" type="image/png" href="/favicon.png" />
     <!-- Растягивание контента под челку и Dynamic Island без черных полос -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
 
@@ -108,7 +108,7 @@
   </head>
   <body class="bg-[#09090b] text-white min-h-screen w-full m-0 p-0" style="background-color: #09090b; margin: 0; padding: 0; min-height: 100vh;">
     <div id="root" class="min-h-screen w-full bg-[#09090b]">
-      <!-- Чистый CSS-лоадер до старта React: 0 внешних запросов, без статического текста -->
+      <!-- Стартовый экран до старта React: логотип DIESEL ROOM и CSS-лоадер (без внешних запросов) -->
       <div id="initial-splash" style="display:flex;min-height:100vh;flex-direction:column;align-items:center;justify-content:center;padding:24px;text-align:center;background-color:#09090b;box-sizing:border-box;">
         <style>
           @keyframes dr-spin {
@@ -125,6 +125,7 @@
             animation: dr-spin 0.85s cubic-bezier(0.5, 0.1, 0.4, 0.9) infinite;
           }
         </style>
+        <img src="/brand/logo.webp" alt="DIESEL ROOM" width="200" height="143" style="width:200px;height:auto;margin-bottom:28px;" />
         <div class="dr-spinner"></div>
       </div>
     </div>

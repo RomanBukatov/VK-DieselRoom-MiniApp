@@ -85,7 +85,7 @@ public class RatingService
     }
 
     /// <summary>
-    /// «🔥 Удержание 1-го места: X / 7 дней подряд». Сегодняшний день засчитывается, пока гость держит 1-е место.
+    /// «Удержание 1-го места: X / 7 дней подряд». Сегодняшний день засчитывается, пока гость держит 1-е место.
     /// </summary>
     public async Task<int> GetFirstPlaceStreakAsync(int userId, DateTime now, CancellationToken ct = default)
     {
@@ -105,7 +105,7 @@ public class RatingService
 
     /// <summary>
     /// Фиксирует лидера дня (в 23:59 по Перми, до недельного сброса). На 7-й день подряд — спецприз
-    /// «🥃 Бутылка Хаски 0.5» купоном, который гасит официант. Повторный вызов за ту же дату ничего не делает.
+    /// «Бутылка Хаски 0.5» купоном, который гасит официант. Повторный вызов за ту же дату ничего не делает.
     /// </summary>
     public async Task<DailyLeaderSnapshot?> TakeDailySnapshotAsync(DateTime now, CancellationToken ct = default)
     {
@@ -151,7 +151,7 @@ public class RatingService
         {
             _logger.LogInformation("[RATING_AUDIT] Action=StreakPrize UserId={UserId} Code={Code}", leader.Id, prize.Code);
             _notifier.Send(leader.VkId,
-                $"🥃 Легенда! Вы удержали 1-е место в Гонке недели DIESEL ROOM {PrivilegeCatalog.FirstPlaceStreakTarget} дней подряд.\n" +
+                $"Легенда! Вы удержали 1-е место в Гонке недели DIESEL ROOM {PrivilegeCatalog.FirstPlaceStreakTarget} дней подряд.\n" +
                 $"Ваш спецприз «{PrivilegeCatalog.FirstPlaceStreakPrizeTitle}» ждёт в профиле → «Мои подарки» (купон #{prize.Code}).",
                 "спецприз за 7 дней на 1-м месте");
         }
@@ -211,7 +211,7 @@ public class RatingService
     }
 
     public static string BuildDisplacementMessage(int newRank, int diff) =>
-        $"⚡ Вас обошли в недельном рейтинге Diesel Room! Вы переместились на #{newRank} место. " +
+        $"Вас обошли в недельном рейтинге Diesel Room! Вы переместились на #{newRank} место. " +
         $"Наберите ещё {diff} очков, чтобы вернуть свою привилегию!";
 
     /// <summary>

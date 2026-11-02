@@ -5,6 +5,9 @@ import { adminApi, type AfishaEventInput, type BannerInput, type ShopItemInput, 
 import { apiErrorMessage } from '../../api/client';
 import { useApp } from '../../store/useApp';
 import { BOOKING_FORMATS } from '../../domain/booking';
+import { KeyIcon } from '../../components/Icon';
+import { MENU_ICON_KEYS, PRIZE_ICON_KEYS } from '../../config/icons';
+import { PrizeVisual } from '../../components/Brand';
 import { formatPermDateTime } from '../../utils/format';
 import type { AfishaEvent, Banner, LoyaltyRates, MenuLink, ShopItem, StaffAuditEntry, StaffMember } from '../../types';
 
@@ -140,7 +143,7 @@ const AfishaAdmin: React.FC = () => {
           <Card key={m.id} className="!p-3 mb-2">
             <div className="flex items-center justify-between gap-2">
               <div className="min-w-0">
-                <div className="text-sm font-bold">{m.emoji} {m.title}</div>
+                <div className="text-sm font-bold flex items-center gap-1.5"><KeyIcon name={m.icon} className="w-4 h-4 text-dr-red-light" /> {m.title}</div>
                 <div className="text-[11px] text-dr-muted truncate">{m.url}</div>
                 {m.hiddenAfter && <div className="text-[10px] text-amber-300">Скрыть после {formatPermDateTime(m.hiddenAfter)}</div>}
               </div>
@@ -195,8 +198,12 @@ const AfishaAdmin: React.FC = () => {
       <Sheet open={!!link} onClose={() => setLink(null)} title="Кнопка меню">
         {link && (
           <div className="space-y-3 pb-3">
-            <div className="grid grid-cols-[72px_1fr] gap-2">
-              <Field label="Эмодзи"><input className={inputClass} value={link.emoji} onChange={(e) => setLink({ ...link, emoji: e.target.value })} /></Field>
+            <div className="grid grid-cols-[120px_1fr] gap-2">
+              <Field label="Иконка">
+                <select className={inputClass} value={link.icon} onChange={(e) => setLink({ ...link, icon: e.target.value })}>
+                  {MENU_ICON_KEYS.map((k) => <option key={k} value={k}>{k}</option>)}
+                </select>
+              </Field>
               <Field label="Название"><input className={inputClass} value={link.title} onChange={(e) => setLink({ ...link, title: e.target.value })} /></Field>
             </div>
             <Field label="Ссылка (https://)"><input className={inputClass} value={link.url} onChange={(e) => setLink({ ...link, url: e.target.value })} /></Field>
@@ -209,7 +216,7 @@ const AfishaAdmin: React.FC = () => {
               className="w-full"
               disabled={saver.busy}
               onClick={async () =>
-                (await saver.run(() => adminApi.saveMenu(link.id, { emoji: link.emoji, title: link.title, url: link.url, hiddenAfter: link.hiddenAfter, isActive: link.isActive, sortOrder: link.sortOrder }))) &&
+                (await saver.run(() => adminApi.saveMenu(link.id, { icon: link.icon, title: link.title, url: link.url, hiddenAfter: link.hiddenAfter, isActive: link.isActive, sortOrder: link.sortOrder }))) &&
                 (setLink(null), void menu.reload())
               }
             >
@@ -251,7 +258,7 @@ const AfishaAdmin: React.FC = () => {
 
 // ---------------- Каталог подарков ----------------
 
-const emptyItem: ShopItemInput = { title: '', description: '', icon: '🎁', priceCoins: 100, stockCount: 10, isActive: true, sortOrder: 0 };
+const emptyItem: ShopItemInput = { title: '', description: '', icon: 'gift', imageUrl: '', priceCoins: 100, stockCount: 10, isActive: true, sortOrder: 0 };
 
 const ShopAdmin: React.FC = () => {
   const items = useAdminList(adminApi.shopItems);
@@ -268,7 +275,7 @@ const ShopAdmin: React.FC = () => {
         <Card key={i.id} className="!p-3">
           <div className="flex items-center justify-between gap-2">
             <div className="min-w-0">
-              <div className="text-sm font-bold truncate">{i.icon} {i.title}</div>
+              <div className="text-sm font-bold truncate flex items-center gap-1.5"><KeyIcon name={i.icon} className="w-4 h-4 text-dr-red-light shrink-0" /> {i.title}</div>
               <div className="text-[11px] text-dr-muted">{i.priceCoins} баллов · остаток {i.stockCount}</div>
             </div>
             <div className="flex items-center gap-1.5 shrink-0">
@@ -283,11 +290,19 @@ const ShopAdmin: React.FC = () => {
       <Sheet open={!!edit} onClose={() => setEdit(null)} title={edit?.id ? 'Подарок' : 'Новый подарок'}>
         {edit && (
           <div className="space-y-3 pb-3">
-            <div className="grid grid-cols-[72px_1fr] gap-2">
-              <Field label="Иконка"><input className={inputClass} value={edit.value.icon} onChange={(e) => setEdit({ ...edit, value: { ...edit.value, icon: e.target.value } })} /></Field>
+            <PrizeVisual icon={edit.value.icon} imageUrl={edit.value.imageUrl || null} title={edit.value.title} className="rounded-2xl" />
+            <div className="grid grid-cols-[120px_1fr] gap-2">
+              <Field label="Иконка">
+                <select className={inputClass} value={edit.value.icon} onChange={(e) => setEdit({ ...edit, value: { ...edit.value, icon: e.target.value } })}>
+                  {PRIZE_ICON_KEYS.map((k) => <option key={k} value={k}>{k}</option>)}
+                </select>
+              </Field>
               <Field label="Название"><input className={inputClass} value={edit.value.title} onChange={(e) => setEdit({ ...edit, value: { ...edit.value, title: e.target.value } })} /></Field>
             </div>
             <Field label="Описание"><input className={inputClass} value={edit.value.description ?? ''} onChange={(e) => setEdit({ ...edit, value: { ...edit.value, description: e.target.value } })} /></Field>
+            <Field label="Фото" hint="/prizes/имя.webp из приложения или ссылка https://. Пусто — фирменная заглушка с иконкой.">
+              <input className={inputClass} value={edit.value.imageUrl ?? ''} onChange={(e) => setEdit({ ...edit, value: { ...edit.value, imageUrl: e.target.value } })} />
+            </Field>
             <div className="grid grid-cols-2 gap-2">
               <Field label="Цена, баллов"><input inputMode="numeric" className={inputClass} value={edit.value.priceCoins} onChange={(e) => setEdit({ ...edit, value: { ...edit.value, priceCoins: Number(e.target.value.replace(/\D/g, '')) || 0 } })} /></Field>
               <Field label="Остаток"><input inputMode="numeric" className={inputClass} value={edit.value.stockCount} onChange={(e) => setEdit({ ...edit, value: { ...edit.value, stockCount: Number(e.target.value.replace(/\D/g, '')) || 0 } })} /></Field>
@@ -305,16 +320,16 @@ const ShopAdmin: React.FC = () => {
 // ---------------- Ставки начисления ----------------
 
 const RATE_FIELDS: { key: keyof LoyaltyRates; label: string }[] = [
-  { key: 'likeCoins', label: '❤️ Лайк — баллы' },
-  { key: 'likeRating', label: '❤️ Лайк — рейтинг' },
-  { key: 'commentCoins', label: '💬 Коммент — баллы' },
-  { key: 'commentRating', label: '💬 Коммент — рейтинг' },
-  { key: 'repostCoins', label: '↗️ Репост — баллы' },
-  { key: 'repostRating', label: '↗️ Репост — рейтинг' },
-  { key: 'visitCoins', label: '🧾 Визит — баллы' },
-  { key: 'visitRating', label: '🧾 Визит — рейтинг' },
-  { key: 'referralCoins', label: '🤝 Друг — баллы' },
-  { key: 'referralRating', label: '🤝 Друг — рейтинг' },
+  { key: 'likeCoins', label: 'Лайк — баллы' },
+  { key: 'likeRating', label: 'Лайк — рейтинг' },
+  { key: 'commentCoins', label: 'Коммент — баллы' },
+  { key: 'commentRating', label: 'Коммент — рейтинг' },
+  { key: 'repostCoins', label: 'Репост — баллы' },
+  { key: 'repostRating', label: 'Репост — рейтинг' },
+  { key: 'visitCoins', label: 'Визит — баллы' },
+  { key: 'visitRating', label: 'Визит — рейтинг' },
+  { key: 'referralCoins', label: 'Друг — баллы' },
+  { key: 'referralRating', label: 'Друг — рейтинг' },
   { key: 'maxPaidCommentsPer24h', label: 'Комментов в сутки' },
   { key: 'dailySocialCoinsCap', label: 'Потолок соцбаллов/сутки' },
   { key: 'minRewardPostId', label: 'Мин. ID поста (архив)' },
@@ -419,16 +434,16 @@ const StaffAdmin: React.FC = () => {
 // ---------------- Журнал аудита ----------------
 
 const ACTION_LABELS: Record<string, string> = {
-  VisitAccrued: '🧾 Визит по чеку',
-  GiftIssued: '🎁 Выдан подарок',
-  PrivilegeIssued: '🏆 Выдана привилегия',
-  BookingConfirmed: '✅ Бронь подтверждена',
-  BookingRejected: '✕ Бронь отклонена',
+  VisitAccrued: 'Визит по чеку',
+  GiftIssued: 'Выдан подарок',
+  PrivilegeIssued: 'Выдана привилегия',
+  BookingConfirmed: 'Бронь подтверждена',
+  BookingRejected: 'Бронь отклонена',
   BookingCompleted: 'Гость посетил',
-  SettingsChanged: '⚙️ Ставки',
-  StaffChanged: '👤 Сотрудники',
-  CatalogChanged: '🎁 Каталог',
-  AfishaChanged: '🎉 Афиша',
+  SettingsChanged: 'Ставки',
+  StaffChanged: 'Сотрудники',
+  CatalogChanged: 'Каталог',
+  AfishaChanged: 'Афиша',
 };
 
 const AuditLog: React.FC = () => {

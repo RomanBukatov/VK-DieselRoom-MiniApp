@@ -64,7 +64,7 @@ export const ProfilePanel: React.FC = () => {
         <Button
           variant="dark"
           className="w-full"
-          onClick={async () => showToast((await requestGroupMessages()) ? '🔔 Уведомления от DIESEL ROOM включены.' : 'Откройте приложение во ВКонтакте, чтобы включить уведомления.')}
+          onClick={async () => showToast((await requestGroupMessages()) ? 'Уведомления от DIESEL ROOM включены.' : 'Откройте приложение во ВКонтакте, чтобы включить уведомления.')}
         >
           <Bell className="w-4 h-4" /> Уведомления о бронях и рейтинге
         </Button>

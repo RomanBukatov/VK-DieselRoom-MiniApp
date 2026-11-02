@@ -66,7 +66,7 @@ export const BookingSheet: React.FC<Props> = ({ open, event, onClose, onCreated 
         afishaEventId: event?.id ?? null,
       });
       triggerHaptic('medium');
-      showToast('⏳ Заявка отправлена! Подтверждение придёт сообщением от DIESEL ROOM.');
+      showToast('Заявка отправлена. Подтверждение придёт сообщением от DIESEL ROOM.');
       onCreated?.();
       onClose();
     } catch (e) {
@@ -112,7 +112,6 @@ export const BookingSheet: React.FC<Props> = ({ open, event, onClose, onCreated 
                   form.format === f.value ? 'border-dr-red bg-dr-red/15 text-white shadow-dr-glow' : 'border-dr-border bg-dr-card text-dr-muted'
                 }`}
               >
-                <span className="mr-1">{f.emoji}</span>
                 {f.label}
               </button>
             ))}

@@ -20,7 +20,8 @@ public class MenuLink
 {
     public int Id { get; set; }
     public string Key { get; set; } = string.Empty;
-    public string Emoji { get; set; } = string.Empty;
+    /// <summary>Ключ векторной иконки плитки: utensils, martini, wine.</summary>
+    public string Icon { get; set; } = string.Empty;
     public string Title { get; set; } = string.Empty;
     public string Url { get; set; } = string.Empty;
     /// <summary>После этого момента (UTC) кнопка автоматически скрывается.</summary>

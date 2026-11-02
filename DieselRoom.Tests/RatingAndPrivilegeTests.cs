@@ -139,7 +139,7 @@ public class RatingAndPrivilegeTests
         Assert.Equal(1, notice.OldRank);
         Assert.Equal(2, notice.NewRank);
         Assert.Equal(11, notice.PointsToReturn); // 60 − 50 + 1
-        Assert.Equal("⚡ Вас обошли в недельном рейтинге Diesel Room! Вы переместились на #2 место. Наберите ещё 11 очков, чтобы вернуть свою привилегию!",
+        Assert.Equal("Вас обошли в недельном рейтинге Diesel Room! Вы переместились на #2 место. Наберите ещё 11 очков, чтобы вернуть свою привилегию!",
             notice.Message);
 
         // А возвращает 1-е место (70) — теперь вниз смещается Б, он получает своё уведомление

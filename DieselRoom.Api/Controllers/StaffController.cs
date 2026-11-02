@@ -12,7 +12,7 @@ using Microsoft.EntityFrameworkCore;
 namespace DieselRoom.Api.Controllers;
 
 /// <summary>
-/// Рабочий экран сотрудника: 🎁 выдача подарка / привилегии ранга, 🧾 начисление за визит по чеку, 📅 заявки на бронь.
+/// Рабочий экран сотрудника: выдача подарка / привилегии ранга, начисление за визит по чеку, заявки на бронь.
 /// Администратору доступно всё то же самое.
 /// </summary>
 [ApiController]
@@ -98,7 +98,7 @@ public class StaffController : ControllerBase
         return new StaffLookupDto(orderDto, cards);
     }
 
-    /// <summary>✅ Подтвердить выдачу подарка по купону #DR-XXXX.</summary>
+    /// <summary>Подтвердить выдачу подарка по купону #DR-XXXX.</summary>
     [HttpPost("coupons/issue")]
     public async Task<ActionResult<ShopOrderDto>> IssueCoupon([FromBody] IssueCouponRequest request, CancellationToken ct)
     {
@@ -106,7 +106,7 @@ public class StaffController : ControllerBase
         return result.Ok ? ShopOrderDto.From(result.Value!) : Error(result.Error, result.StatusCode);
     }
 
-    /// <summary>✅ Подтвердить использование недельной привилегии ранга (лимиты проверяются в момент выдачи).</summary>
+    /// <summary>Подтвердить использование недельной привилегии ранга (лимиты проверяются в момент выдачи).</summary>
     [HttpPost("privileges/redeem")]
     public async Task<ActionResult<GuestCardDto>> RedeemPrivilege([FromBody] RedeemPrivilegeRequest request, CancellationToken ct)
     {
@@ -116,7 +116,7 @@ public class StaffController : ControllerBase
         return await _profiles.BuildGuestCardAsync(guest, Now, ct);
     }
 
-    /// <summary>🧾 Начисление за визит по номеру закрытого чека (1 чек = 1 раз).</summary>
+    /// <summary>Начисление за визит по номеру закрытого чека (1 чек = 1 раз).</summary>
     [HttpPost("visits")]
     public async Task<ActionResult<VisitResultDto>> AccrueVisit([FromBody] AccrueVisitRequest request, CancellationToken ct)
     {
@@ -127,7 +127,7 @@ public class StaffController : ControllerBase
             await _profiles.BuildGuestCardAsync(v.Guest, Now, ct), v.ReferralRewardPaid, v.Inviter?.DisplayName);
     }
 
-    /// <summary>📅 Заявки на бронь: по умолчанию ожидающие и подтверждённые на сегодня и позже.</summary>
+    /// <summary>Заявки на бронь: по умолчанию ожидающие и подтверждённые на сегодня и позже.</summary>
     [HttpGet("bookings")]
     public async Task<ActionResult<IEnumerable<BookingDto>>> Bookings([FromQuery] BookingStatus? status, CancellationToken ct)
     {

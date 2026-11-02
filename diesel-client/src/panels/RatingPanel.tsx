@@ -2,10 +2,14 @@ import React, { useState } from 'react';
 import clsx from 'clsx';
 import { Card, Empty, ErrorLine, Segmented, Spinner } from '../components/ui';
 import { AntMascot } from '../components/Brand';
+import { KeyIcon } from '../components/Icon';
+import { RankBadge } from '../components/Rank';
+import { toneClass } from '../config/tones';
+import { Flame } from 'lucide-react';
 import { guestApi } from '../api/endpoints';
 import { useSwr } from '../store/useSwr';
 import { useApp } from '../store/useApp';
-import { TIERS, rankBadge, streakText, tierRangeLabel } from '../domain/privileges';
+import { STREAK_PRIZE, TIERS, streakText, tierForRank, tierRangeLabel } from '../domain/privileges';
 import { formatPermDateTime } from '../utils/format';
 import type { LeaderboardRow } from '../types';
 
@@ -27,16 +31,19 @@ const Row: React.FC<{ row: LeaderboardRow; weekly: boolean }> = ({ row, weekly }
       row.isMe ? 'bg-dr-red/10 border-dr-red/50 shadow-dr-glow' : 'bg-dr-card border-dr-border',
     )}
   >
-    <div className="w-9 text-center">
-      <div className={clsx('font-black', row.rank <= 3 ? 'text-lg' : 'text-sm text-dr-muted')}>{weekly && row.rank <= 3 ? rankBadge(row.rank) : `#${row.rank}`}</div>
-    </div>
+    <RankBadge rank={row.rank} weekly={weekly} />
     <Avatar url={row.photoUrl} name={row.name} />
     <div className="flex-1 min-w-0">
       <div className="text-sm font-bold truncate">
         {row.name}
         {row.isMe && <span className="text-dr-red-light"> · вы</span>}
       </div>
-      {weekly && row.privilegeLabel && <div className="text-[11px] text-dr-muted truncate">{row.privilegeLabel}</div>}
+      {weekly && row.privilegeLabel && (
+        <div className="text-[11px] text-dr-muted truncate flex items-center gap-1">
+          <KeyIcon name={tierForRank(row.rank)?.icon} className="w-3.5 h-3.5 text-dr-red-light shrink-0" />
+          {row.privilegeLabel}
+        </div>
+      )}
     </div>
     <div className="text-right">
       <div className="text-sm font-black">{row.rating.toLocaleString('ru-RU')}</div>
@@ -61,8 +68,8 @@ export const RatingPanel: React.FC = () => {
         value={kind}
         onChange={setKind}
         options={[
-          { value: 'weekly', label: '🔥 Гонка недели' },
-          { value: 'total', label: '🏆 За всё время' },
+          { value: 'weekly', label: 'Гонка недели' },
+          { value: 'total', label: 'За всё время' },
         ]}
       />
 
@@ -77,16 +84,22 @@ export const RatingPanel: React.FC = () => {
               Ваша привилегия: <span className="text-dr-red-light">{profile.privilege.label}</span>
             </div>
           )}
-          {streak && <div className="mt-1 text-xs font-bold text-amber-300">{streak} · спецприз 🥃 Бутылка Хаски 0.5</div>}
+          {streak && (
+            <div className="mt-1 text-xs font-bold text-amber-300 flex items-center gap-1">
+              <Flame className="w-3.5 h-3.5 shrink-0" /> {streak} · спецприз «{STREAK_PRIZE}»
+            </div>
+          )}
           <details className="mt-3">
             <summary className="text-xs font-bold text-white cursor-pointer">Призы по местам</summary>
             <ul className="mt-2 space-y-1.5">
               {TIERS.map((t) => (
                 <li key={t.tier} className="text-xs flex gap-2">
-                  <span className="w-5 text-center">{t.dot}</span>
+                  <span className={clsx('w-5 h-5 rounded-md border flex items-center justify-center shrink-0', toneClass(t.tone))}>
+                    <KeyIcon name={t.icon} className="w-3 h-3" />
+                  </span>
                   <span className="w-20 shrink-0 text-dr-muted">{tierRangeLabel(t)}</span>
                   <span>
-                    {t.emoji} {t.title} <span className="text-dr-muted">({t.conditions})</span>
+                    {t.title} <span className="text-dr-muted">({t.conditions})</span>
                   </span>
                 </li>
               ))}
@@ -104,7 +117,7 @@ export const RatingPanel: React.FC = () => {
         <ErrorLine text={!data ? board.error : null} onRetry={board.reload} />
         {data && data.rows.length === 0 && (
           <Empty>
-            <AntMascot className="w-14 h-14 mx-auto mb-2 opacity-60" />
+            <AntMascot className="w-24 mx-auto mb-3 opacity-80" />
             {kind === 'weekly' ? 'Гонка только началась — ставьте лайки, комментируйте и приходите в гости!' : 'Пока никто не набрал очков.'}
           </Empty>
         )}

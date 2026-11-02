@@ -253,7 +253,7 @@ public class RatingsController : GuestControllerBase
         _rating = rating;
     }
 
-    /// <summary>🔥 Гонка недели: места с текущими привилегиями (п. 4.1).</summary>
+    /// <summary>Гонка недели: места с текущими привилегиями (п. 4.1).</summary>
     [HttpGet("weekly")]
     public async Task<ActionResult<LeaderboardDto>> Weekly(CancellationToken ct)
     {
@@ -275,7 +275,7 @@ public class RatingsController : GuestControllerBase
             PermTime.WeekStart(Now), PermTime.NextWeeklyReset(Now), PrivilegeCatalog.All.Select(PrivilegeInfoDto.From).ToList());
     }
 
-    /// <summary>🏆 За всё время.</summary>
+    /// <summary>За всё время.</summary>
     [HttpGet("total")]
     public async Task<ActionResult<LeaderboardDto>> Total(CancellationToken ct)
     {

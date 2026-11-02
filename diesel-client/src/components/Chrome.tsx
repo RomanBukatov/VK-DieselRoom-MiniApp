@@ -20,7 +20,7 @@ export const Header: React.FC = () => {
   return (
     <header className="px-4 pt-[max(env(safe-area-inset-top),0.75rem)] pb-3">
       <div className="flex items-center justify-between gap-2 vk-controls-pad">
-        <Logo />
+        <Logo className="h-9" />
         {profile && (
           <div className="flex items-center gap-1.5 bg-dr-card border border-dr-border rounded-full pl-1.5 pr-3 py-1 text-xs font-bold">
             <CoinIcon className="w-5 h-5" />

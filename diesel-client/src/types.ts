@@ -12,7 +12,7 @@ export type TabType = 'afisha' | 'rating' | 'profile' | 'staff';
 
 export interface Privilege {
   tier: PrivilegeTier;
-  emoji: string | null;
+  icon: string | null;
   title: string | null;
   conditions: string | null;
   label: string | null;
@@ -27,7 +27,7 @@ export interface Privilege {
 
 export interface Achievement {
   key: string;
-  emoji: string;
+  icon: string;
   title: string;
   description: string;
   unlocked: boolean;
@@ -82,7 +82,7 @@ export interface PrivilegeInfo {
   tier: PrivilegeTier;
   topRank: number;
   bottomRank: number;
-  emoji: string;
+  icon: string;
   title: string;
   conditions: string;
 }
@@ -101,6 +101,7 @@ export interface ShopItem {
   title: string;
   description: string | null;
   icon: string;
+  imageUrl: string | null;
   priceCoins: number;
   stockCount: number;
   isActive: boolean;
@@ -112,6 +113,7 @@ export interface ShopOrder {
   code: string;
   title: string;
   icon: string;
+  imageUrl: string | null;
   priceCoins: number;
   status: ShopOrderStatus;
   createdAt: string;
@@ -134,7 +136,7 @@ export interface Banner {
 export interface MenuLink {
   id: number;
   key: string;
-  emoji: string;
+  icon: string;
   title: string;
   url: string;
   hiddenAfter: string | null;

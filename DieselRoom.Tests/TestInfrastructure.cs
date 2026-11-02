@@ -119,7 +119,7 @@ public sealed class TestDb : IDisposable
     public ShopItem AddItem(string title = "Кофе", int price = 50, int stock = 5, bool active = true)
     {
         using var db = NewContext();
-        var item = new ShopItem { Title = title, Icon = "☕", PriceCoins = price, StockCount = stock, IsActive = active };
+        var item = new ShopItem { Title = title, Icon = "coffee", PriceCoins = price, StockCount = stock, IsActive = active };
         db.ShopItems.Add(item);
         db.SaveChanges();
         return item;

@@ -84,7 +84,7 @@ public class AppDbContext : DbContext
         modelBuilder.Entity<MenuLink>(e =>
         {
             e.Property(m => m.Key).HasMaxLength(32).IsRequired();
-            e.Property(m => m.Emoji).HasMaxLength(16);
+            e.Property(m => m.Icon).HasMaxLength(32);
             e.Property(m => m.Title).HasMaxLength(100).IsRequired();
             e.Property(m => m.Url).HasMaxLength(500).IsRequired();
             e.HasIndex(m => m.Key).IsUnique();
@@ -114,7 +114,8 @@ public class AppDbContext : DbContext
         {
             e.Property(i => i.Title).HasMaxLength(120).IsRequired();
             e.Property(i => i.Description).HasMaxLength(500);
-            e.Property(i => i.Icon).HasMaxLength(16);
+            e.Property(i => i.Icon).HasMaxLength(32);
+            e.Property(i => i.ImageUrl).HasMaxLength(300);
             e.ToTable(t => t.HasCheckConstraint("CK_ShopItems_StockCount", "\"StockCount\" >= 0"));
         });
 
@@ -122,7 +123,8 @@ public class AppDbContext : DbContext
         {
             e.Property(o => o.Code).HasMaxLength(16).IsRequired();
             e.Property(o => o.Title).HasMaxLength(120);
-            e.Property(o => o.Icon).HasMaxLength(16);
+            e.Property(o => o.Icon).HasMaxLength(32);
+            e.Property(o => o.ImageUrl).HasMaxLength(300);
             e.Property(o => o.IssuedByStaffName).HasMaxLength(100);
             e.HasIndex(o => o.Code).IsUnique();
             e.HasIndex(o => new { o.UserId, o.Status });

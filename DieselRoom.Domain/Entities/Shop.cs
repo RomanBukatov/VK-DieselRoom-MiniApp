@@ -7,7 +7,10 @@ public class ShopItem
     public int Id { get; set; }
     public string Title { get; set; } = string.Empty;
     public string? Description { get; set; }
-    public string Icon { get; set; } = "🎁";
+    /// <summary>Ключ векторной иконки (lucide) для карточки без фото: coffee, beer, pizza, burger…</summary>
+    public string Icon { get; set; } = "gift";
+    /// <summary>Превью блюда (оптимизированный WebP из /prizes/); null — брендированная заглушка с иконкой.</summary>
+    public string? ImageUrl { get; set; }
     public int PriceCoins { get; set; }
     /// <summary>Остаток на складе. Покупка резервирует −1, отмена / истечение купона возвращает +1.</summary>
     public int StockCount { get; set; }
@@ -26,7 +29,8 @@ public class ShopOrder
     /// <summary>Код без «#»: DR-XXXX (уникальный).</summary>
     public string Code { get; set; } = string.Empty;
     public string Title { get; set; } = string.Empty;
-    public string Icon { get; set; } = "🎁";
+    public string Icon { get; set; } = "gift";
+    public string? ImageUrl { get; set; }
     public int PriceCoins { get; set; }
     public ShopOrderStatus Status { get; set; } = ShopOrderStatus.Pending;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;

@@ -184,16 +184,16 @@ public class ApiIntegrationTests : IClassFixture<DieselApp>
 
         using (var db = _app.NewDb())
         {
-            await db.Users.Where(u => u.Id == userId).ExecuteUpdateAsync(s => s.SetProperty(u => u.DieselCoinsBalance, 500));
+            await db.Users.Where(u => u.Id == userId).ExecuteUpdateAsync(s => s.SetProperty(u => u.DieselCoinsBalance, 1000));
         }
 
         var items = await ReadJson(await guestClient.GetAsync("/api/shop/items"));
-        var coffee = items.EnumerateArray().First(i => i.GetProperty("title").GetString() == "Кофе на выбор");
+        var coffee = items.EnumerateArray().First(i => i.GetProperty("title").GetString() == "Кофе");
         var stockBefore = coffee.GetProperty("stockCount").GetInt32();
 
         var bought = await ReadJson(await guestClient.PostAsync($"/api/shop/items/{coffee.GetProperty("id").GetInt32()}/purchase", null));
         var code = bought.GetProperty("order").GetProperty("code").GetString()!;
-        Assert.Equal(440, bought.GetProperty("coins").GetInt32());
+        Assert.Equal(700, bought.GetProperty("coins").GetInt32());
         Assert.Equal("Pending", bought.GetProperty("order").GetProperty("status").GetString());
         Assert.EndsWith("Z", bought.GetProperty("order").GetProperty("expiresAt").GetString());
 
@@ -208,7 +208,7 @@ public class ApiIntegrationTests : IClassFixture<DieselApp>
         // Второй подарок отменяем — баллы и остаток возвращаются
         var second = await ReadJson(await guestClient.PostAsync($"/api/shop/items/{coffee.GetProperty("id").GetInt32()}/purchase", null));
         var cancel = await ReadJson(await guestClient.PostAsync($"/api/shop/orders/{second.GetProperty("order").GetProperty("id").GetInt32()}/cancel", null));
-        Assert.Equal(440, cancel.GetProperty("coins").GetInt32());
+        Assert.Equal(700, cancel.GetProperty("coins").GetInt32());
 
         var orders = await ReadJson(await guestClient.GetAsync("/api/shop/orders"));
         Assert.Equal(["Cancelled", "Issued"], orders.EnumerateArray().Select(o => o.GetProperty("status").GetString()!).ToArray());
@@ -267,7 +267,7 @@ public class ApiIntegrationTests : IClassFixture<DieselApp>
         });
         Assert.Equal(HttpStatusCode.OK, created.StatusCode);
         var booking = await ReadJson(created);
-        Assert.Equal("⏳ Ожидает подтверждения", booking.GetProperty("statusLabel").GetString());
+        Assert.Equal("Ожидает подтверждения", booking.GetProperty("statusLabel").GetString());
 
         var staff = _app.ClientFor("4545");
         var inbox = await ReadJson(await staff.GetAsync("/api/staff/bookings"));
@@ -291,7 +291,7 @@ public class ApiIntegrationTests : IClassFixture<DieselApp>
         var board = await ReadJson(await _app.ClientFor("1414").GetAsync("/api/ratings/weekly"));
         var first = board.GetProperty("rows")[0];
         Assert.Equal(1, first.GetProperty("rank").GetInt32());
-        Assert.Equal("🍱 Бизнес-ланч бесплатно", first.GetProperty("privilegeLabel").GetString());
+        Assert.Equal("Бизнес-ланч бесплатно", first.GetProperty("privilegeLabel").GetString());
         Assert.True(first.GetProperty("isMe").GetBoolean());
         Assert.Equal(7, board.GetProperty("tiers").GetArrayLength());
     }

@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNow } from '../../store/useNow';
 import { Timer } from 'lucide-react';
 import { Button, Card, Empty, ErrorLine, Pill, Segmented, Sheet } from '../../components/ui';
-import { CoinIcon } from '../../components/Brand';
+import { CoinIcon, PrizeVisual } from '../../components/Brand';
 import { QrCode } from '../../components/QrCode';
 import { guestApi } from '../../api/endpoints';
 import { apiErrorMessage } from '../../api/client';
@@ -28,7 +28,7 @@ export const ShopSection: React.FC<{ onPurchased: (order: ShopOrder) => void }> 
       const result = await guestApi.purchase(item.id);
       patchCoins(result.coins);
       triggerHaptic('heavy');
-      showToast(`🎁 «${item.title}» ваш! Купон ${displayCode(result.order.code)} — в «Моих подарках».`);
+      showToast(`«${item.title}» ваш. Купон ${displayCode(result.order.code)} — в «Моих подарках».`);
       setConfirm(null);
       onPurchased(result.order);
       void items.reload();
@@ -48,9 +48,10 @@ export const ShopSection: React.FC<{ onPurchased: (order: ShopOrder) => void }> 
           const enough = (profile?.coins ?? 0) >= item.priceCoins;
           const soldOut = item.stockCount <= 0;
           return (
-            <Card key={item.id} className="!p-3 flex flex-col">
-              <div className="text-3xl" aria-hidden="true">{item.icon}</div>
-              <div className="text-sm font-bold mt-1 leading-tight">{item.title}</div>
+            <Card key={item.id} className="!p-0 flex flex-col">
+              <PrizeVisual icon={item.icon} imageUrl={item.imageUrl} title={item.title} className="rounded-t-2xl" />
+              <div className="p-3 pt-2 flex flex-col flex-1">
+              <div className="text-sm font-bold leading-tight">{item.title}</div>
               {item.description && <div className="text-[11px] text-dr-muted mt-0.5 line-clamp-2">{item.description}</div>}
               <div className="flex items-center gap-1 mt-2 text-sm font-black">
                 <CoinIcon className="w-4 h-4" /> {item.priceCoins.toLocaleString('ru-RU')}
@@ -59,6 +60,7 @@ export const ShopSection: React.FC<{ onPurchased: (order: ShopOrder) => void }> 
               <Button size="sm" className="mt-2 w-full" disabled={soldOut || !enough} onClick={() => { setError(null); setConfirm(item); }}>
                 {soldOut ? 'Закончился' : enough ? 'Обменять' : 'Не хватает баллов'}
               </Button>
+              </div>
             </Card>
           );
         })}
@@ -68,8 +70,8 @@ export const ShopSection: React.FC<{ onPurchased: (order: ShopOrder) => void }> 
         {confirm && (
           <div className="pb-3 space-y-3">
             <div className="text-center">
-              <div className="text-5xl">{confirm.icon}</div>
-              <div className="font-black text-lg mt-2">{confirm.title}</div>
+              <PrizeVisual icon={confirm.icon} imageUrl={confirm.imageUrl} title={confirm.title} className="rounded-2xl" />
+              <div className="font-black text-lg mt-3">{confirm.title}</div>
               <div className="text-sm text-dr-muted mt-1">
                 Спишется {formatCoins(confirm.priceCoins)}. Купон действует 7 дней — покажите QR-код официанту.
               </div>
@@ -107,7 +109,7 @@ export const MyGifts: React.FC<{ version: number }> = ({ version }) => {
     try {
       const result = await guestApi.cancelOrder(order.id);
       patchCoins(result.coins);
-      showToast(order.priceCoins > 0 ? `↩️ Заказ отменён: ${formatCoins(order.priceCoins)} вернулись на баланс.` : 'Заказ отменён.');
+      showToast(order.priceCoins > 0 ? `Заказ отменён: ${formatCoins(order.priceCoins)} вернулись на баланс.` : 'Заказ отменён.');
       setShown(null);
       void reload();
     } catch (e) {
@@ -132,7 +134,7 @@ export const MyGifts: React.FC<{ version: number }> = ({ version }) => {
         {grouped[tab].map((order) => (
           <Card key={order.id} className="!p-3">
             <div className="flex items-center gap-3">
-              <div className="text-3xl" aria-hidden="true">{order.icon}</div>
+              <PrizeVisual icon={order.icon} imageUrl={order.imageUrl} title={order.title} className="!w-16 rounded-xl shrink-0" />
               <div className="flex-1 min-w-0">
                 <div className="text-sm font-bold truncate">{order.title}</div>
                 <div className="text-[11px] text-dr-muted">
@@ -162,7 +164,10 @@ export const MyGifts: React.FC<{ version: number }> = ({ version }) => {
       <Sheet open={!!shown} onClose={() => setShown(null)} title="Купон на подарок">
         {shown && (
           <div className="flex flex-col items-center gap-3 pb-4">
-            <div className="text-lg font-black">{shown.icon} {shown.title}</div>
+            <div className="w-full flex items-center gap-3">
+              <PrizeVisual icon={shown.icon} imageUrl={shown.imageUrl} title={shown.title} className="!w-16 rounded-xl shrink-0" />
+              <div className="text-base font-black leading-snug">{shown.title}</div>
+            </div>
             <QrCode value={displayCode(shown.code)} size={220} />
             <div className="text-3xl font-black tracking-[0.15em] text-dr-red-light">{displayCode(shown.code)}</div>
             <Pill tone="amber">
