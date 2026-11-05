@@ -1,4 +1,5 @@
 import React, { Component, useEffect, type ErrorInfo, type ReactNode } from 'react';
+import clsx from 'clsx';
 import { Header, TabBar, Toast } from './components/Chrome';
 import { AfishaPanel } from './panels/AfishaPanel';
 import { RatingPanel } from './panels/RatingPanel';
@@ -8,9 +9,10 @@ import { useApp } from './store/useApp';
 import { useBackHandler } from './utils/backNavigation';
 import { APP_CACHE_VERSION_KEY, safeStorage } from './utils/safeStorage';
 import { AntMascot } from './components/Brand';
+import { LegalModal } from './components/LegalModal';
 
 const App: React.FC = () => {
-  const { activeTab, setTab, boot, staff } = useApp();
+  const { activeTab, setTab, boot, staff, profile } = useApp();
 
   useEffect(() => {
     void boot();
@@ -27,13 +29,17 @@ const App: React.FC = () => {
   return (
     <div className="min-h-screen bg-dr-bg text-white">
       <Toast />
-      <Header />
-      <main>
-        {activeTab === 'afisha' && <AfishaPanel />}
-        {activeTab === 'rating' && <RatingPanel />}
-        {activeTab === 'profile' && <ProfilePanel />}
-        {activeTab === 'staff' && <StaffPanel />}
-      </main>
+      {profile?.consentRequired && <LegalModal />}
+      {/* На компьютере — аккуратная центрированная колонка, для панели персонала шире */}
+      <div className={clsx('mx-auto w-full', activeTab === 'staff' ? 'max-w-4xl' : 'max-w-xl')}>
+        <Header />
+        <main>
+          {activeTab === 'afisha' && <AfishaPanel />}
+          {activeTab === 'rating' && <RatingPanel />}
+          {activeTab === 'profile' && <ProfilePanel />}
+          {activeTab === 'staff' && <StaffPanel />}
+        </main>
+      </div>
       <TabBar />
     </div>
   );

@@ -23,6 +23,50 @@ export interface Privilege {
   reason: string | null;
   firstPlaceStreak: number;
   streakTarget: number;
+  ageRestricted: boolean;
+}
+
+export interface PrivilegeCode {
+  code: string;
+  qrValue: string;
+  expiresAt: string;
+  secondsLeft: number;
+}
+
+export interface GuestLevel {
+  index: number;
+  title: string;
+  minRating: number;
+  nextTitle: string | null;
+  nextMinRating: number | null;
+  progressPercent: number;
+  pointsToNext: number | null;
+}
+
+export interface LevelRule {
+  title: string;
+  minRating: number;
+}
+
+export interface RaceProgress {
+  pointsToNextPlace: number | null;
+  nextRank: number | null;
+  nextPrizeTitle: string | null;
+  nextPrizeRank: number | null;
+  pointsToNextPrize: number | null;
+}
+
+export type GuestTaskAction = 'profile' | 'join' | 'messages';
+
+export interface GuestTask {
+  key: string;
+  title: string;
+  hint: string;
+  coins: number;
+  rating: number;
+  oneTime: boolean;
+  done: boolean;
+  action: GuestTaskAction | null;
 }
 
 export interface Achievement {
@@ -52,10 +96,19 @@ export interface Profile {
   visitsCount: number;
   privilege: Privilege;
   achievements: Achievement[];
-  referral: { code: string; invitedCount: number; rewardedCount: number; rewardCoins: number; rewardRating: number };
+  referral: {
+    code: string; invitedCount: number; rewardedCount: number; rewardCoins: number; rewardRating: number;
+    hasInviter: boolean; canEnterCode: boolean;
+  };
   role: StaffRole;
   staffName: string | null;
   nextWeeklyResetAt: string;
+  consentRequired: boolean;
+  consentAcceptedAt: string | null;
+  profileCompleted: boolean;
+  level: GuestLevel;
+  race: RaceProgress;
+  tasks: GuestTask[];
 }
 
 export interface PointsTransaction {
@@ -106,6 +159,7 @@ export interface ShopItem {
   stockCount: number;
   isActive: boolean;
   sortOrder: number;
+  ageRestricted: boolean;
 }
 
 export interface ShopOrder {
@@ -121,6 +175,7 @@ export interface ShopOrder {
   issuedAt: string | null;
   closedAt: string | null;
   isPrize: boolean;
+  ageRestricted: boolean;
 }
 
 export interface Banner {
@@ -150,7 +205,10 @@ export interface AfishaEvent {
   tagline: string | null;
   description: string | null;
   productUrl: string | null;
+  productLabel: string | null;
   imageUrl: string | null;
+  eventDate: string | null;
+  eventTime: string | null;
   allowBooking: boolean;
   defaultFormat: BookingFormat;
   isActive: boolean;
@@ -174,6 +232,7 @@ export interface Booking {
   phone: string;
   wishes: string | null;
   afishaEventId: number | null;
+  eventTitle: string | null;
   status: BookingStatus;
   statusLabel: string;
   staffComment: string | null;
@@ -194,8 +253,10 @@ export interface GuestCard {
 }
 
 export interface StaffLookup {
-  order: { order: ShopOrder; userId: number; guestName: string; cardNumber: string } | null;
+  order: { order: ShopOrder; userId: number; guestName: string; cardNumber: string; photoUrl: string | null } | null;
   guests: GuestCard[];
+  privilegeCode: string | null;
+  privilegeCodeUserIds: number[];
 }
 
 export interface VisitResult {
@@ -243,4 +304,29 @@ export interface LoyaltyRates {
   maxPaidCommentsPer24h: number;
   dailySocialCoinsCap: number;
   minRewardPostId: number;
+  profileBonusCoins: number;
+  profileBonusRating: number;
+  groupJoinCoins: number;
+  groupJoinRating: number;
+  messageAllowCoins: number;
+  messageAllowRating: number;
+  pollCoins: number;
+  pollRating: number;
+  approachNotifyPoints: number;
+}
+
+export interface AdminGuest {
+  id: number;
+  vkId: string;
+  cardNumber: string;
+  name: string;
+  photoUrl: string | null;
+  phone: string | null;
+  coins: number;
+  weeklyRating: number;
+  totalRating: number;
+  visitsCount: number;
+  levelTitle: string;
+  consentAcceptedAt: string | null;
+  lastSeenAt: string;
 }

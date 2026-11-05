@@ -36,6 +36,11 @@ public abstract class GuestControllerBase : ControllerBase
     }
 
     protected ObjectResult Error(string? message, int status) => StatusCode(status, new { message });
+
+    /// <summary>Ошибка, если гость ещё не принял условия: без согласия не собираем данные и не выдаём подарки 18+.</summary>
+    protected ObjectResult? ConsentError(User user) => LegalInfo.HasCurrentConsent(user)
+        ? null
+        : Error("Сначала примите условия программы и подтвердите, что вам есть 18 лет.", 403);
 }
 
 [ApiController]
@@ -44,10 +49,96 @@ public abstract class GuestControllerBase : ControllerBase
 public class UsersController : GuestControllerBase
 {
     private readonly ProfileBuilder _profiles;
+    private readonly PrivilegeService _privileges;
+    private readonly SettingsService _settings;
+    private readonly IVkCommunityApi _community;
 
-    public UsersController(AppDbContext db, UserService users, TimeProvider clock, ProfileBuilder profiles) : base(db, users, clock)
+    public UsersController(AppDbContext db, UserService users, TimeProvider clock, ProfileBuilder profiles,
+        PrivilegeService privileges, SettingsService settings, IVkCommunityApi community) : base(db, users, clock)
     {
         _profiles = profiles;
+        _privileges = privileges;
+        _settings = settings;
+        _community = community;
+    }
+
+    /// <summary>Профиль после операции: ExecuteUpdate меняет баланс в обход трекера, поэтому сначала перечитываем гостя.</summary>
+    private async Task<ProfileDto> FreshProfileAsync(User user, CancellationToken ct)
+    {
+        await Db.Entry(user).ReloadAsync(ct);
+        return await _profiles.BuildAsync(user, HttpContext.GetStaff(), Now, ct);
+    }
+
+    /// <summary>Согласие: условия программы, персональные данные (152-ФЗ) и возраст 18+. Дата сохраняется в базе.</summary>
+    [HttpPost("me/consent")]
+    public async Task<ActionResult<ProfileDto>> Consent([FromBody] ConsentRequest request, CancellationToken ct)
+    {
+        var user = await CurrentUserAsync(ct);
+        var result = await Users.AcceptConsentAsync(user, request.AcceptTerms, request.PersonalData, request.Adult, Now, ct);
+        if (!result.Ok) return Error(result.Error, result.StatusCode);
+        return await FreshProfileAsync(user, ct);
+    }
+
+    /// <summary>Форма профиля: имя и телефон; за первое заполнение — разовый бонус.</summary>
+    [HttpPut("me/profile")]
+    public async Task<ActionResult<ProfileDto>> SaveProfile([FromBody] SaveProfileRequest request, CancellationToken ct)
+    {
+        var user = await CurrentUserAsync(ct);
+        if (ConsentError(user) is { } denied) return denied;
+        var rates = await _settings.GetRatesAsync(ct);
+        var result = await Users.SaveProfileAsync(user, request.FirstName, request.LastName, request.Phone, rates, Now, ct);
+        if (!result.Ok) return Error(result.Error, result.StatusCode);
+        return await FreshProfileAsync(user, ct);
+    }
+
+    /// <summary>Промокод друга, введённый вручную.</summary>
+    [HttpPost("me/referral")]
+    public async Task<ActionResult<ProfileDto>> ApplyReferral([FromBody] ApplyReferralRequest request, CancellationToken ct)
+    {
+        var user = await CurrentUserAsync(ct);
+        if (ConsentError(user) is { } denied) return denied;
+        var result = await Users.ApplyReferralAsync(user, request.Code, Now, ct);
+        if (!result.Ok) return Error(result.Error, result.StatusCode);
+        return await FreshProfileAsync(user, ct);
+    }
+
+    /// <summary>
+    /// Сверка разовых заданий с ВК: кто подписался или разрешил сообщения раньше (событие Callback API уже не придёт).
+    /// Начисляем только по ответу сервера ВК, а не за нажатие кнопки.
+    /// </summary>
+    [HttpPost("me/tasks/verify")]
+    public async Task<ActionResult<ProfileDto>> VerifyTasks(CancellationToken ct)
+    {
+        var user = await CurrentUserAsync(ct);
+        if (ConsentError(user) is { } denied) return denied;
+
+        var rates = await _settings.GetRatesAsync(ct);
+        if (await _community.IsMemberAsync(user.VkId, ct) == true)
+        {
+            await OneTimeRewards.TryAwardAsync(Db, user, OneTimeRewards.GroupJoin, 0, rates.GroupJoinCoins, rates.GroupJoinRating,
+                PointsTransactionTypes.GroupJoinBonus, "Подписка на группу DIESEL ROOM", Now, ct);
+        }
+        if (await _community.AreMessagesAllowedAsync(user.VkId, ct) == true)
+        {
+            await OneTimeRewards.TryAwardAsync(Db, user, OneTimeRewards.MessageAllow, 0, rates.MessageAllowCoins, rates.MessageAllowRating,
+                PointsTransactionTypes.MessageAllowBonus, "Разрешены сообщения от DIESEL ROOM", Now, ct);
+        }
+        return await FreshProfileAsync(user, ct);
+    }
+
+    /// <summary>Временный код привилегии для экрана гостя: без него официант не подтвердит выдачу.</summary>
+    [HttpGet("me/privilege-code")]
+    public async Task<ActionResult<PrivilegeCodeDto>> PrivilegeCode(CancellationToken ct)
+    {
+        var user = await CurrentUserAsync(ct);
+        if (ConsentError(user) is { } denied) return denied;
+
+        var active = await _privileges.GetActiveAsync(user.Id, Now, ct);
+        if (active.Info == null) return Error("Код появится, когда вы войдёте в топ-50 недели.", 404);
+
+        var code = _privileges.GetCode(user.Id, Now);
+        return new PrivilegeCodeDto(code.Code, PrivilegeCodes.QrPrefix + code.Code, code.ExpiresAt,
+            (int)Math.Ceiling((code.ExpiresAt - Now).TotalSeconds));
     }
 
     /// <summary>Первое открытие / обновление имени и аватара; здесь же привязывается промокод друга (#ref=...).</summary>
@@ -145,6 +236,7 @@ public class BookingsController : GuestControllerBase
             return Error("Укажите время брони.", 400);
 
         var user = await CurrentUserAsync(ct);
+        if (ConsentError(user) is { } denied) return denied;
         var result = await _bookings.CreateAsync(user.Id,
             new BookingRequest(date, time, request.GuestsCount, request.Format, request.Name, request.Phone, request.Wishes, request.AfishaEventId),
             Now, ct);
@@ -203,6 +295,7 @@ public class ShopController : GuestControllerBase
     public async Task<ActionResult<PurchaseResultDto>> Purchase(int id, CancellationToken ct)
     {
         var user = await CurrentUserAsync(ct);
+        if (ConsentError(user) is { } denied) return denied;
         var result = await _shop.PurchaseAsync(user.Id, id, Now, ct);
         if (!result.Ok) return Error(result.Error, result.StatusCode);
         var coins = await Db.Users.AsNoTracking().Where(u => u.Id == user.Id).Select(u => u.DieselCoinsBalance).FirstAsync(ct);

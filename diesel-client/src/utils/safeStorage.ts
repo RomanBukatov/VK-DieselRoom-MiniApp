@@ -2,7 +2,7 @@
 // Предотвращает фатальные крэши (DOMException: SecurityError / QuotaExceededError)
 // в режимах Safari Incognito, приватных вкладках или строгих iframe-контейнерах VK/Telegram.
 
-export const APP_CACHE_VERSION = 'v1.0.0';
+export const APP_CACHE_VERSION = 'v2.0.0';
 export const APP_CACHE_VERSION_KEY = 'diesel_app_cache_version';
 
 const memoryStorage: Record<string, string> = {};

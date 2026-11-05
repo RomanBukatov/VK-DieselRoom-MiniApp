@@ -42,4 +42,5 @@ public static class StaffAuditActions
     public const string StaffChanged = "StaffChanged";
     public const string CatalogChanged = "CatalogChanged";
     public const string AfishaChanged = "AfishaChanged";
+    public const string GuestAdjusted = "GuestAdjusted";
 }

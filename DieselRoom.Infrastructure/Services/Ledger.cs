@@ -50,6 +50,37 @@ public static class Ledger
             }, ct);
     }
 
+    /// <summary>
+    /// Ручная корректировка администратора: баланс не уходит в минус (false — списать столько нельзя), рейтинг
+    /// не опускается ниже нуля. «Заработано всего» не меняется: это не начисление за действие гостя.
+    /// </summary>
+    public static async Task<bool> AdjustAsync(
+        AppDbContext db, int userId, int coins, int rating, string description, DateTime now, CancellationToken ct = default)
+    {
+        var changed = await db.Users
+            .Where(u => u.Id == userId && u.DieselCoinsBalance + coins >= 0)
+            .ExecuteUpdateAsync(s =>
+            {
+                s.SetProperty(u => u.DieselCoinsBalance, u => u.DieselCoinsBalance + coins);
+                s.SetProperty(u => u.WeeklyRating, u => u.WeeklyRating + rating < 0 ? 0 : u.WeeklyRating + rating);
+                s.SetProperty(u => u.TotalRating, u => u.TotalRating + rating < 0 ? 0 : u.TotalRating + rating);
+                if (rating > 0) s.SetProperty(u => u.WeeklyRatingUpdatedAt, now);
+            }, ct);
+        if (changed != 1) return false;
+
+        db.PointsTransactions.Add(new PointsTransaction
+        {
+            UserId = userId,
+            Coins = coins,
+            Rating = rating,
+            Type = PointsTransactionTypes.ManualAdjust,
+            Description = description,
+            CreatedAt = now,
+        });
+        await db.SaveChangesAsync(ct);
+        return true;
+    }
+
     /// <summary>Возврат баллов (отмена / истечение купона): баланс растёт, «заработано всего» и рейтинг — нет.</summary>
     public static async Task RefundAsync(
         AppDbContext db, int userId, int coins, string type, string description, DateTime now, CancellationToken ct = default)

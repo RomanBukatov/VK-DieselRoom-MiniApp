@@ -31,7 +31,7 @@ public class RatingAndPrivilegeTests
     }
 
     [Fact]
-    public async Task UnlimitedCoffee_MovesInstantly_WhenPlayerBOvertakesPlayerA()
+    public async Task UnlimitedCoffee_MovesInstantly_WhenGuestBOvertakesGuestA()
     {
         using var t = new TestDb();
         var now = TestTimes.WednesdayEvening;
@@ -53,8 +53,8 @@ public class RatingAndPrivilegeTests
         Assert.Equal(PrivilegeTier.Hookah, aAfter.Tier);
 
         // Официант пробивает кофе Б — проходит; А кофе уже не положен
-        Assert.True((await t.Create().Privileges.RedeemAsync(TestDb.Waiter, b.Id, now)).Ok);
-        var aCoffee = await t.Create().Privileges.RedeemAsync(TestDb.Waiter, a.Id, now);
+        Assert.True((await t.Redeem(b.Id, now)).Ok);
+        var aCoffee = await t.Redeem(a.Id, now);
         Assert.False(aCoffee.Ok); // у А теперь кальян, а в среду он не выдаётся
         Assert.Contains("Пт/Сб", aCoffee.Error);
     }
@@ -68,10 +68,10 @@ public class RatingAndPrivilegeTests
 
         for (var i = 1; i <= 3; i++)
         {
-            var ok = await t.Create().Privileges.RedeemAsync(TestDb.Waiter, leader.Id, lunch.AddDays(i - 1));
+            var ok = await t.Redeem(leader.Id, lunch.AddDays(i - 1));
             Assert.True(ok.Ok, ok.Error);
         }
-        var fourth = await t.Create().Privileges.RedeemAsync(TestDb.Waiter, leader.Id, lunch.AddDays(3));
+        var fourth = await t.Redeem(leader.Id, lunch.AddDays(3));
         Assert.False(fourth.Ok);
         Assert.Contains("3 из 3", fourth.Error);
 
@@ -79,11 +79,11 @@ public class RatingAndPrivilegeTests
         Assert.Equal(3, status.Availability.Used);
 
         // Вне окна 12:00–16:00 не выдаётся
-        var evening = await t.Create().Privileges.RedeemAsync(TestDb.Waiter, leader.Id, lunch.AddDays(7).AddHours(5));
+        var evening = await t.Redeem(leader.Id, lunch.AddDays(7).AddHours(5));
         Assert.False(evening.Ok);
 
         // Следующая неделя (лидер всё ещё первый — у него остались очки в тесте) — лимит снова 0 из 3
-        Assert.True((await t.Create().Privileges.RedeemAsync(TestDb.Waiter, leader.Id, lunch.AddDays(7))).Ok);
+        Assert.True((await t.Redeem(leader.Id, lunch.AddDays(7))).Ok);
 
         using var db = t.NewContext();
         Assert.Equal(4, await db.PrivilegeRedemptions.CountAsync());
@@ -98,8 +98,8 @@ public class RatingAndPrivilegeTests
         t.AddUser("531", weekly: 80, weeklyAt: T0);
         var third = t.AddUser("532", weekly: 70, weeklyAt: T0);
 
-        Assert.True((await t.Create().Privileges.RedeemAsync(TestDb.Waiter, third.Id, TestTimes.FridayEvening)).Ok);
-        var again = await t.Create().Privileges.RedeemAsync(TestDb.Waiter, third.Id, TestTimes.FridayEvening.AddDays(1));
+        Assert.True((await t.Redeem(third.Id, TestTimes.FridayEvening)).Ok);
+        var again = await t.Redeem(third.Id, TestTimes.FridayEvening.AddDays(1));
         Assert.False(again.Ok);
         Assert.Contains("Лимит исчерпан", again.Error);
     }
@@ -114,11 +114,11 @@ public class RatingAndPrivilegeTests
         var p = await t.Create().Privileges.GetActiveAsync(last.Id, TestTimes.WednesdayEvening);
         Assert.Equal(51, p.Rank);
         Assert.Equal(PrivilegeTier.None, p.Tier);
-        Assert.False((await t.Create().Privileges.RedeemAsync(TestDb.Waiter, last.Id, TestTimes.WednesdayEvening)).Ok);
+        Assert.False((await t.Redeem(last.Id, TestTimes.WednesdayEvening)).Ok);
     }
 
     [Fact]
-    public async Task Displacement_NotifiesWhenDroppingOutOfTier_WithPointsToReturn_AndSixHourCooldown()
+    public async Task Displacement_NamesLostPrivilegeAndPlace_AndPointsToReturn()
     {
         using var t = new TestDb();
         var now = TestTimes.WednesdayEvening;
@@ -129,40 +129,226 @@ public class RatingAndPrivilegeTests
         Assert.Empty(await t.Create().Rating.DetectDisplacementsAsync(now));
         Assert.Equal(1, t.GetUser(a.Id).LastKnownWeeklyRank);
 
-        // Б обгоняет А (визит +10 → 50, но позже — нужно ещё +1; второй визит → 60)
+        // Б обгоняет А: два визита по +10 дают 60 очков
         await t.Create().Visits.AccrueAsync(TestDb.Waiter, b.Id, "D-1", VisitType.Regular, now);
         await t.Create().Visits.AccrueAsync(TestDb.Waiter, b.Id, "D-2", VisitType.Regular, now);
 
-        var notices = await t.Create().Rating.DetectDisplacementsAsync(now.AddMinutes(1));
-        var notice = Assert.Single(notices);
+        var notice = Assert.Single(await t.Create().Rating.DetectDisplacementsAsync(now.AddMinutes(1)));
         Assert.Equal(a.Id, notice.UserId);
-        Assert.Equal(1, notice.OldRank);
-        Assert.Equal(2, notice.NewRank);
-        Assert.Equal(11, notice.PointsToReturn); // 60 − 50 + 1
-        Assert.Equal("Вас обошли в недельном рейтинге Diesel Room! Вы переместились на #2 место. Наберите ещё 11 очков, чтобы вернуть свою привилегию!",
+        Assert.Equal((1, 2, 11), (notice.OldRank, notice.NewRank, notice.PointsToReturn)); // 60 − 50 + 1
+        Assert.Equal("Вас сместили с 1-го места! Привилегия «Бесплатный бизнес-ланч» больше недоступна: сейчас вы на 2-м месте. Наберите ещё 11 очков, чтобы вернуть её.",
             notice.Message);
+    }
 
-        // А возвращает 1-е место (70) — теперь вниз смещается Б, он получает своё уведомление
-        await t.Create().Visits.AccrueAsync(TestDb.Waiter, a.Id, "D-3", VisitType.Regular, now);
-        await t.Create().Visits.AccrueAsync(TestDb.Waiter, a.Id, "D-4", VisitType.Regular, now);
-        var bNotice = Assert.Single(await t.Create().Rating.DetectDisplacementsAsync(now.AddMinutes(30)));
-        Assert.Equal(b.Id, bNotice.UserId);
+    [Fact]
+    public void DisplacementMessage_ForSecondPlace_ReadsNaturally() =>
+        Assert.StartsWith("Вас сместили со 2-го места! Привилегия «Безлимитный кофе»",
+            RatingService.BuildDisplacementMessage(2, 3, "Безлимитный кофе", 1));
 
-        // Через час А снова теряет 1-е место — уведомление А не чаще 1 раза в 6 часов
-        await t.Create().Visits.AccrueAsync(TestDb.Waiter, b.Id, "D-5", VisitType.Regular, now);
-        await t.Create().Visits.AccrueAsync(TestDb.Waiter, b.Id, "D-6", VisitType.Regular, now);
+    [Fact]
+    public async Task Displacement_DuringCooldown_IsDelivered_AfterCooldownEnds()
+    {
+        using var t = new TestDb();
+        var now = TestTimes.WednesdayEvening;
+        var a = t.AddUser("705", weekly: 50, weeklyAt: T0);
+        var b = t.AddUser("706", weekly: 45, weeklyAt: T0);
+        Assert.Empty(await t.Create().Rating.DetectDisplacementsAsync(now));
+
+        // А смещён и получил уведомление
+        await t.Create().Visits.AccrueAsync(TestDb.Waiter, b.Id, "C-1", VisitType.Regular, now);
+        Assert.Equal(a.Id, Assert.Single(await t.Create().Rating.DetectDisplacementsAsync(now.AddMinutes(1))).UserId);
+
+        // А вернул 1-е место: теперь смещён Б
+        await t.Create().Visits.AccrueAsync(TestDb.Waiter, a.Id, "C-2", VisitType.Regular, now);
+        Assert.Equal(b.Id, Assert.Single(await t.Create().Rating.DetectDisplacementsAsync(now.AddMinutes(2))).UserId);
+
+        // Через час А смещён снова: пауза 6 часов, сообщения нет, но прежнее место остаётся в базе
+        await t.Create().Visits.AccrueAsync(TestDb.Waiter, b.Id, "C-3", VisitType.Regular, now);
         Assert.Empty(await t.Create().Rating.DetectDisplacementsAsync(now.AddHours(1)));
-        Assert.Equal(2, t.GetUser(a.Id).LastKnownWeeklyRank); // место всё равно запомнено
+        Assert.Equal(1, t.GetUser(a.Id).LastKnownWeeklyRank);
 
-        // Б теряет 1-е место через 5,5 ч после своего уведомления — тоже молчим
-        await t.Create().Visits.AccrueAsync(TestDb.Waiter, a.Id, "D-7", VisitType.Regular, now);
-        await t.Create().Visits.AccrueAsync(TestDb.Waiter, a.Id, "D-8", VisitType.Regular, now);
-        Assert.Empty(await t.Create().Rating.DetectDisplacementsAsync(now.AddHours(6)));
+        // Пауза кончилась: событие не потеряно
+        var late = Assert.Single(await t.Create().Rating.DetectDisplacementsAsync(now.AddHours(7)));
+        Assert.Equal(a.Id, late.UserId);
+        Assert.Equal(1, late.OldRank);
+        Assert.Equal(2, t.GetUser(a.Id).LastKnownWeeklyRank);
+    }
 
-        // Через 7 ч после первого уведомления А снова можно предупредить
-        await t.Create().Visits.AccrueAsync(TestDb.Waiter, b.Id, "D-9", VisitType.Regular, now);
-        await t.Create().Visits.AccrueAsync(TestDb.Waiter, b.Id, "D-10", VisitType.Regular, now);
-        Assert.Equal(a.Id, Assert.Single(await t.Create().Rating.DetectDisplacementsAsync(now.AddHours(7))).UserId);
+    [Fact]
+    public async Task Displacement_RegainedDuringCooldown_IsNotReported()
+    {
+        using var t = new TestDb();
+        var now = TestTimes.WednesdayEvening;
+        var a = t.AddUser("707", weekly: 50, weeklyAt: T0);
+        var b = t.AddUser("708", weekly: 45, weeklyAt: T0);
+        Assert.Empty(await t.Create().Rating.DetectDisplacementsAsync(now));
+
+        await t.Create().Visits.AccrueAsync(TestDb.Waiter, b.Id, "E-1", VisitType.Regular, now);
+        Assert.Single(await t.Create().Rating.DetectDisplacementsAsync(now.AddMinutes(1)));
+        await t.Create().Visits.AccrueAsync(TestDb.Waiter, a.Id, "E-2", VisitType.Regular, now);
+        Assert.Single(await t.Create().Rating.DetectDisplacementsAsync(now.AddMinutes(2)));
+        await t.Create().Visits.AccrueAsync(TestDb.Waiter, b.Id, "E-3", VisitType.Regular, now);
+        Assert.Empty(await t.Create().Rating.DetectDisplacementsAsync(now.AddHours(1)));
+
+        // А вернул себе место до конца паузы — сообщать не о чем
+        await t.Create().Visits.AccrueAsync(TestDb.Waiter, a.Id, "E-4", VisitType.Regular, now);
+        var later = await t.Create().Rating.DetectDisplacementsAsync(now.AddHours(8));
+        Assert.DoesNotContain(later, n => n.UserId == a.Id);
+    }
+
+    [Fact]
+    public async Task Approach_WarnsOncePerGoalPerWeek_WithExactText()
+    {
+        using var t = new TestDb();
+        var now = TestTimes.WednesdayEvening;
+        t.AddUser("720", weekly: 500, weeklyAt: T0);
+        t.AddUser("721", weekly: 400, weeklyAt: T0);
+        t.AddUser("722", weekly: 100, weeklyAt: T0); // 3-е место
+        var fourth = t.AddUser("723", weekly: 89, weeklyAt: T0); // до Топ-3: 100 − 89 + 1 = 12
+
+        var notice = Assert.Single(await t.Create().Rating.DetectApproachesAsync(now));
+        Assert.Equal(fourth.Id, notice.UserId);
+        Assert.Equal(PrivilegeTier.Hookah, notice.Goal);
+        Assert.Equal("До бесплатного кальяна (Топ-3) осталось всего 12 очков!", notice.Message);
+
+        // О той же цели на этой неделе не повторяем, даже после паузы
+        Assert.Empty(await t.Create().Rating.DetectApproachesAsync(now.AddHours(13)));
+    }
+
+    [Fact]
+    public async Task Approach_FarGuests_DisabledSetting_AndSkipList()
+    {
+        using var t = new TestDb();
+        var now = TestTimes.WednesdayEvening;
+        t.AddUser("730", weekly: 500, weeklyAt: T0);
+        var second = t.AddUser("731", weekly: 490, weeklyAt: T0);
+        t.AddUser("732", weekly: 100, weeklyAt: T0); // далеко от 2-го места
+
+        // Гостю только что ушло сообщение о смещении: второе подряд не шлём
+        Assert.Empty(await t.Create().Rating.DetectApproachesAsync(now, new HashSet<int> { second.Id }));
+
+        using (var db = t.NewContext())
+        {
+            await new SettingsService(db).SaveRatesAsync(LoyaltyRates.Default with { ApproachNotifyPoints = 0 });
+        }
+        Assert.Empty(await t.Create().Rating.DetectApproachesAsync(now));
+    }
+
+    [Fact]
+    public async Task Approach_GoalResetsAfterWeeklyReset()
+    {
+        using var t = new TestDb();
+        var guest = t.AddUser("740", weekly: 90, weeklyAt: T0);
+        t.AddUser("741", weekly: 95, weeklyAt: T0);
+        Assert.Single(await t.Create().Rating.DetectApproachesAsync(TestTimes.WednesdayEvening));
+        Assert.Equal(PrivilegeTier.BusinessLunch, t.GetUser(guest.Id).LastApproachTier);
+
+        await t.Create().Rating.RunWeeklyResetIfDueAsync(TestTimes.WednesdayEvening);
+        await t.Create().Rating.RunWeeklyResetIfDueAsync(new DateTime(2026, 11, 8, 18, 59, 0, DateTimeKind.Utc));
+        Assert.Null(t.GetUser(guest.Id).LastApproachTier);
+    }
+
+    [Fact]
+    public async Task RaceProgress_ShowsPointsToNextPlaceAndNextPrize()
+    {
+        using var t = new TestDb();
+        t.AddUser("750", weekly: 200, weeklyAt: T0);
+        t.AddUser("751", weekly: 150, weeklyAt: T0);
+        t.AddUser("752", weekly: 100, weeklyAt: T0);
+        var fifthAhead = t.AddUser("753", weekly: 80, weeklyAt: T0);
+        var me = t.AddUser("754", weekly: 70, weeklyAt: T0);
+
+        var s = t.Create();
+        var race = await s.Rating.GetRaceProgressAsync(t.GetUser(me.Id), 5);
+        Assert.Equal(11, race.PointsToNextPlace); // 80 − 70 + 1
+        Assert.Equal(4, race.NextRank);
+        Assert.Equal("Классический кальян", race.NextPrizeTitle);
+        Assert.Equal(3, race.NextPrizeRank);
+        Assert.Equal(31, race.PointsToNextPrize); // 100 − 70 + 1
+
+        var leader = await s.Rating.GetRaceProgressAsync(t.GetUser(fifthAhead.Id), 1);
+        Assert.Null(leader.PointsToNextPlace);
+    }
+
+    [Fact]
+    public async Task Privilege_RequiresValidCode_AndCodeIsSingleUse()
+    {
+        using var t = new TestDb();
+        var now = TestTimes.WednesdayEvening;
+        t.AddUser("760", weekly: 100, weeklyAt: T0);
+        var second = t.AddUser("761", weekly: 90, weeklyAt: T0); // безлимитный кофе: лимита нет, защищает только код
+
+        var s = t.Create();
+        var code = s.Privileges.GetCode(second.Id, now);
+        Assert.Matches("^[0-9]{6}$", code.Code);
+        Assert.NotEqual(t.GetUser(second.Id).CardNumber, code.Code);
+
+        // Без кода и с номером карты выдать нельзя
+        Assert.False((await t.Create().Privileges.RedeemAsync(TestDb.Waiter, second.Id, null, now)).Ok);
+        var byCard = await t.Create().Privileges.RedeemAsync(TestDb.Waiter, second.Id, t.GetUser(second.Id).CardNumber, now);
+        Assert.False(byCard.Ok);
+        Assert.Contains("Код неверный", byCard.Error);
+
+        // Правильный код срабатывает один раз
+        Assert.True((await t.Create().Privileges.RedeemAsync(TestDb.Waiter, second.Id, code.Code, now)).Ok);
+        var replay = await t.Create().Privileges.RedeemAsync(TestDb.Waiter, second.Id, code.Code, now.AddSeconds(5));
+        Assert.False(replay.Ok);
+        Assert.Contains("уже использован", replay.Error);
+
+        // Новый код — снова можно, старый через 2 минуты уже не подходит
+        var fresh = t.Create().Privileges.GetCode(second.Id, now.AddMinutes(1));
+        Assert.True((await t.Create().Privileges.RedeemAsync(TestDb.Waiter, second.Id, fresh.Code, now.AddMinutes(1))).Ok);
+        var stale = await t.Create().Privileges.RedeemAsync(TestDb.Waiter, second.Id, fresh.Code, now.AddMinutes(4));
+        Assert.False(stale.Ok);
+    }
+
+    [Fact]
+    public async Task PrivilegeCode_FromPreviousWindow_StillAccepted_AndFoundByStaffLookup()
+    {
+        using var t = new TestDb();
+        var now = TestTimes.WednesdayEvening;
+        var guest = t.AddUser("762", weekly: 100, weeklyAt: T0);
+        t.AddUser("763", weekly: 90, weeklyAt: T0);
+
+        var code = t.Create().Privileges.GetCode(guest.Id, now).Code;
+        Assert.Contains(guest.Id, await t.Create().Privileges.FindByCodeAsync(code, now.AddSeconds(60)));
+        Assert.DoesNotContain(guest.Id, await t.Create().Privileges.FindByCodeAsync(code, now.AddMinutes(5)));
+    }
+
+    [Fact]
+    public async Task Staff_CannotServeThemselves()
+    {
+        using var t = new TestDb();
+        var now = TestTimes.WednesdayEvening;
+        var waiterAsGuest = t.AddUser("555", coins: 500, weekly: 100, weeklyAt: T0);
+        var item = t.AddItem();
+
+        var visit = await t.Create().Visits.AccrueAsync(TestDb.Waiter, waiterAsGuest.Id, "SELF-1", VisitType.Regular, now);
+        Assert.False(visit.Ok);
+        Assert.Equal(403, visit.StatusCode);
+        Assert.Equal(0, t.GetUser(waiterAsGuest.Id).VisitsCount);
+
+        var privilege = await t.Redeem(waiterAsGuest.Id, TestTimes.MondayLunch);
+        Assert.Equal(403, privilege.StatusCode);
+
+        var order = (await t.Create().Shop.PurchaseAsync(waiterAsGuest.Id, item.Id, now)).Value!;
+        Assert.Equal(403, (await t.Create().Shop.IssueAsync(TestDb.Waiter, order.Code, now)).StatusCode);
+
+        // Вход по ПИН-коду на планшете: сотрудник узнаётся по VK ID, привязанному в админке
+        var tablet = new StaffIdentity(StaffRole.Staff, 8, "Бармен", "9999", LinkedVkId: "555");
+        Assert.Equal(403, (await t.Create().Visits.AccrueAsync(tablet, waiterAsGuest.Id, "SELF-2", VisitType.Regular, now)).StatusCode);
+    }
+
+    [Fact]
+    public async Task StreakPrize_IsMarkedAgeRestricted()
+    {
+        using var t = new TestDb();
+        var leader = t.AddUser("770", weekly: 100, weeklyAt: T0);
+        var day1 = PermTime.ToUtc(new DateTime(2026, 11, 2, 23, 56, 0));
+        for (var d = 0; d < 7; d++) await t.Create().Rating.TakeDailySnapshotAsync(day1.AddDays(d));
+
+        using var db = t.NewContext();
+        Assert.True((await db.ShopOrders.SingleAsync(o => o.UserId == leader.Id)).AgeRestricted);
     }
 
     [Fact]

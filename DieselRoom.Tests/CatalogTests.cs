@@ -106,6 +106,34 @@ public class CatalogTests
     }
 
     [Fact]
+    public void AgeRestricted_ExactlyAlcoholAndHookahPrizes()
+    {
+        var restricted = DbInitializer.OfficialCatalog().Where(i => i.AgeRestricted).Select(i => i.Title).ToHashSet();
+        Assert.Equal(new HashSet<string>
+        {
+            "Бокал пива", "Бокал вина", "Сет из 5 шотов водка-редбул", "1 л коктейля виски-кола",
+            "Вин Дизель Бургер + Бокал пива", "Кальян на фрукте", "Бутылка водочки «Хаски»", "Сет «БИГ» + 1 литр пива",
+        }, restricted);
+    }
+
+    [Fact]
+    public async Task Purchase_CopiesAgeFlagToCoupon()
+    {
+        using var t = new TestDb();
+        var guest = t.AddUser("110", coins: 1000);
+        int itemId;
+        using (var db = t.NewContext())
+        {
+            var item = new ShopItem { Title = "Бокал пива", PriceCoins = 350, StockCount = 1, AgeRestricted = true };
+            db.ShopItems.Add(item);
+            await db.SaveChangesAsync();
+            itemId = item.Id;
+        }
+        var order = await t.Create().Shop.PurchaseAsync(guest.Id, itemId, TestTimes.WednesdayEvening);
+        Assert.True(order.Value!.AgeRestricted);
+    }
+
+    [Fact]
     public void ServerTexts_HaveNoEmoji()
     {
         Assert.All(PrivilegeCatalog.All, p =>

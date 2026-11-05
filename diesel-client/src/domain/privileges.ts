@@ -12,16 +12,17 @@ export interface TierMeta {
   icon: string;
   title: string;
   conditions: string;
+  ageRestricted?: boolean;
 }
 
 export const TIERS: TierMeta[] = [
-  { tier: 'BusinessLunch', top: 1, bottom: 1, tone: 'gold', icon: 'lunch', title: 'Бизнес-ланч бесплатно', conditions: 'до 3 раз в неделю, Пн–Пт 12:00–16:00' },
-  { tier: 'UnlimitedCoffee', top: 2, bottom: 2, tone: 'silver', icon: 'coffee', title: 'Безлимитный кофе', conditions: 'активен, пока вы на 2-м месте' },
-  { tier: 'Hookah', top: 3, bottom: 3, tone: 'bronze', icon: 'hookah', title: 'Бесплатный кальян', conditions: '1 раз в неделю, Пт/Сб' },
-  { tier: 'Dessert', top: 4, bottom: 10, tone: 'red', icon: 'dessert', title: 'Десерт от заведения', conditions: '1 раз в неделю' },
-  { tier: 'BeerOrCoffee', top: 11, bottom: 20, tone: 'amber', icon: 'beer', title: 'Бокал пива 0.5 или кофе', conditions: '1 раз в неделю' },
-  { tier: 'TeaPot', top: 21, bottom: 30, tone: 'steel', icon: 'tea', title: 'Чайник чая', conditions: '1 раз в неделю' },
-  { tier: 'Cocktail', top: 31, bottom: 50, tone: 'muted', icon: 'cocktail', title: 'Коктейль от бара', conditions: '1 раз в 2 недели' },
+  { tier: 'BusinessLunch', top: 1, bottom: 1, tone: 'gold', icon: 'lunch', title: 'Бесплатный бизнес-ланч', conditions: 'суп, горячее, напиток, хлебная корзина · до 3 раз в неделю, Пн–Пт 12:00–16:00' },
+  { tier: 'UnlimitedCoffee', top: 2, bottom: 2, tone: 'silver', icon: 'coffee', title: 'Безлимитный кофе', conditions: 'в любой день, пока вы на 2-м месте' },
+  { tier: 'Hookah', top: 3, bottom: 3, tone: 'bronze', icon: 'hookah', title: 'Классический кальян', conditions: '1 раз в неделю, Пт/Сб', ageRestricted: true },
+  { tier: 'Dessert', top: 4, bottom: 10, tone: 'red', icon: 'dessert', title: 'Десерт в подарок', conditions: '1 раз в неделю' },
+  { tier: 'BeerOrCoffee', top: 11, bottom: 20, tone: 'amber', icon: 'beer', title: 'Бокал разливного пива или кофе', conditions: '1 раз в неделю', ageRestricted: true },
+  { tier: 'TeaPot', top: 21, bottom: 30, tone: 'steel', icon: 'tea', title: 'Чайник чая на выбор', conditions: '1 раз в неделю' },
+  { tier: 'Cocktail', top: 31, bottom: 50, tone: 'muted', icon: 'cocktail', title: 'Бесплатный коктейль', conditions: '1 раз в 14 дней, на вечеринках Пт/Сб', ageRestricted: true },
 ];
 
 export const STREAK_TARGET = 7;
@@ -56,6 +57,6 @@ export function streakText(privilege: Pick<Privilege, 'rank' | 'firstPlaceStreak
 export function usageText(privilege: Pick<Privilege, 'used' | 'limit' | 'tier'>): string {
   if (privilege.tier === 'None') return '';
   if (privilege.limit == null) return 'без лимита, пока держите место';
-  const period = privilege.tier === 'Cocktail' ? 'за 2 недели' : 'на этой неделе';
+  const period = privilege.tier === 'Cocktail' ? 'за 14 дней' : 'на этой неделе';
   return `использовано ${privilege.used} из ${privilege.limit} ${period}`;
 }

@@ -1,7 +1,7 @@
 import { apiClient } from './client';
 import type {
-  Afisha, AfishaEvent, Banner, Booking, BookingFormat, BookingStatus, GuestCard, Leaderboard, LoyaltyRates, MenuLink,
-  PointsTransaction, Profile, ShopItem, ShopOrder, StaffAuditEntry, StaffLookup, StaffMember, StaffRole, VisitResult, VisitType,
+  AdminGuest, Afisha, AfishaEvent, Banner, Booking, BookingFormat, BookingStatus, GuestCard, Leaderboard, LevelRule, LoyaltyRates, MenuLink,
+  PointsTransaction, PrivilegeCode, Profile, ShopItem, ShopOrder, StaffAuditEntry, StaffLookup, StaffMember, StaffRole, VisitResult, VisitType,
 } from '../types';
 
 const get = async <T>(url: string, params?: Record<string, unknown>) => (await apiClient.get<T>(url, { params })).data;
@@ -14,6 +14,11 @@ const del = async (url: string) => {
 export const guestApi = {
   sync: (body: { firstName?: string; lastName?: string; photoUrl?: string; referralCode?: string }) => post<Profile>('/api/users/me', body),
   me: () => get<Profile>('/api/users/me'),
+  consent: () => post<Profile>('/api/users/me/consent', { acceptTerms: true, personalData: true, adult: true }),
+  saveProfile: (body: { firstName: string; lastName?: string; phone: string }) => put<Profile>('/api/users/me/profile', body),
+  applyReferral: (code: string) => post<Profile>('/api/users/me/referral', { code }),
+  verifyTasks: () => post<Profile>('/api/users/me/tasks/verify'),
+  privilegeCode: () => get<PrivilegeCode>('/api/users/me/privilege-code'),
   transactions: () => get<PointsTransaction[]>('/api/users/me/transactions'),
   referrals: () => get<{ name: string; rewardPaid: boolean; joinedAt: string }[]>('/api/users/me/referrals'),
   afisha: () => get<Afisha>('/api/afisha'),
@@ -34,7 +39,7 @@ export const staffApi = {
   session: () => get<{ role: StaffRole; name: string }>('/api/staff/session'),
   lookup: (q: string) => get<StaffLookup>('/api/staff/lookup', { q }),
   issueCoupon: (code: string) => post<ShopOrder>('/api/staff/coupons/issue', { code }),
-  redeemPrivilege: (userId: number) => post<GuestCard>('/api/staff/privileges/redeem', { userId }),
+  redeemPrivilege: (userId: number, code: string) => post<GuestCard>('/api/staff/privileges/redeem', { userId, code }),
   accrueVisit: (userId: number, receiptNumber: string, type: VisitType) => post<VisitResult>('/api/staff/visits', { userId, receiptNumber, type }),
   bookings: (status?: BookingStatus) => get<Booking[]>('/api/staff/bookings', status ? { status } : undefined),
   confirmBooking: (id: number, comment?: string) => post<Booking>(`/api/staff/bookings/${id}/confirm`, { comment }),
@@ -63,5 +68,12 @@ export const adminApi = {
   saveRates: (r: LoyaltyRates) => put<LoyaltyRates>('/api/admin/rates', r),
   staff: () => get<StaffMember[]>('/api/admin/staff'),
   saveStaff: (s: StaffMemberInput, id?: number) => (id ? put<StaffMember>(`/api/admin/staff/${id}`, s) : post<StaffMember>('/api/admin/staff', s)),
+  deleteStaff: (id: number) => del(`/api/admin/staff/${id}`),
+  guests: (q?: string, skip = 0) => get<AdminGuest[]>('/api/admin/guests', { q: q || undefined, skip }),
+  guestTransactions: (id: number) => get<PointsTransaction[]>(`/api/admin/guests/${id}/transactions`),
+  adjustGuest: (id: number, body: { coins: number; rating: number; reason: string }) => post<AdminGuest>(`/api/admin/guests/${id}/adjust`, body),
+  levels: () => get<LevelRule[]>('/api/admin/levels'),
+  saveLevels: (levels: LevelRule[]) => put<LevelRule[]>('/api/admin/levels', levels),
+  uploadMedia: (dataUrl: string) => post<{ url: string }>('/api/admin/media', { dataUrl }),
   audit: (params: { action?: string; q?: string; beforeId?: number }) => get<StaffAuditEntry[]>('/api/admin/audit', params),
 };

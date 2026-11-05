@@ -75,10 +75,10 @@ public sealed class TestDb : IDisposable
         var rating = new RatingService(db, shop, Notifier, settings, NullLogger<RatingService>.Instance);
         return new Services(
             db, settings, shop,
-            new BookingService(db, Notifier),
+            new BookingService(db, Notifier, new StaffAlertService(db, Notifier, StaffOptions)),
             new VisitService(db, settings, Notifier, NullLogger<VisitService>.Instance),
             rating,
-            new PrivilegeService(db, rating),
+            new PrivilegeService(db, rating, StaffOptions),
             new UserService(db),
             new StaffAuthService(db, StaffOptions));
     }
@@ -86,7 +86,7 @@ public sealed class TestDb : IDisposable
     // ---------- Данные ----------
 
     public User AddUser(string vkId, int coins = 0, int weekly = 0, int total = 0, DateTime? weeklyAt = null, string? name = null,
-        int? referredBy = null, int visits = 0, DateTime? createdAt = null)
+        int? referredBy = null, int visits = 0, DateTime? createdAt = null, bool consent = true)
     {
         using var db = NewContext();
         var user = new User
@@ -102,6 +102,9 @@ public sealed class TestDb : IDisposable
             ReferredByUserId = referredBy,
             VisitsCount = visits,
             CreatedAt = createdAt ?? new DateTime(2026, 11, 1, 0, 0, 0, DateTimeKind.Utc),
+            ConsentAcceptedAt = consent ? new DateTime(2026, 11, 1, 0, 0, 0, DateTimeKind.Utc) : null,
+            AdultConfirmedAt = consent ? new DateTime(2026, 11, 1, 0, 0, 0, DateTimeKind.Utc) : null,
+            ConsentVersion = consent ? LegalInfo.CurrentVersion : null,
         };
         db.Users.Add(user);
         db.SaveChanges();
@@ -148,6 +151,13 @@ public sealed class TestDb : IDisposable
     }
 
     public static StaffIdentity Waiter => new(StaffRole.Staff, 7, "Официант Анна", "555");
+
+    /// <summary>Выдача привилегии, как у настоящего официанта: с кодом с экрана гостя.</summary>
+    public Task<OpResult<PrivilegeRedemption>> Redeem(int userId, DateTime now)
+    {
+        var s = Create();
+        return s.Privileges.RedeemAsync(Waiter, userId, s.Privileges.GetCode(userId, now).Code, now);
+    }
 }
 
 public static class TestTimes

@@ -7,7 +7,7 @@ public class PointsTransaction
     public int UserId { get; set; }
     /// <summary>Изменение баллов кошелька (отрицательное — покупка подарка).</summary>
     public int Coins { get; set; }
-    /// <summary>Изменение очков рейтинга (всегда ≥ 0: покупки рейтинг не уменьшают).</summary>
+    /// <summary>Изменение очков рейтинга: покупки его не уменьшают, отрицательным бывает только при ручной корректировке.</summary>
     public int Rating { get; set; }
     public string Type { get; set; } = string.Empty;
     public string Description { get; set; } = string.Empty;
@@ -24,11 +24,19 @@ public static class PointsTransactionTypes
     public const string ShopPurchase = "ShopPurchase";
     public const string ShopRefund = "ShopRefund";
     public const string ShopExpiredRefund = "ShopExpiredRefund";
+    public const string ProfileBonus = "ProfileBonus";
+    public const string GroupJoinBonus = "GroupJoinBonus";
+    public const string MessageAllowBonus = "MessageAllowBonus";
+    public const string PollVote = "PollVote";
+    public const string ManualAdjust = "ManualAdjust";
 
     public static readonly string[] SocialTypes = [VkLike, VkComment, VkRepost];
 }
 
-/// <summary>Начисление за активность на стене группы ВК (уникально по VkId + PostId + ActivityType).</summary>
+/// <summary>
+/// Начисление за активность (уникально по VkId + PostId + ActivityType): запись стены, опрос (PostId = poll_id)
+/// или разовый бонус (PostId = 0) — профиль, подписка, разрешение сообщений.
+/// </summary>
 public class VkActivityLog
 {
     public int Id { get; set; }

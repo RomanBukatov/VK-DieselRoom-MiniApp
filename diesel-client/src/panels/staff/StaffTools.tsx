@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { Check, Search, X } from 'lucide-react';
-import { Button, Card, Empty, ErrorLine, Field, Pill, Spinner, inputClass } from '../../components/ui';
+import { Check, QrCode as QrIcon, Search, X } from 'lucide-react';
+import clsx from 'clsx';
+import { AgeBadge, Button, Card, Empty, ErrorLine, Field, PassportReminder, Pill, Spinner, inputClass } from '../../components/ui';
 import { staffApi } from '../../api/endpoints';
 import { apiErrorMessage } from '../../api/client';
 import { useApp } from '../../store/useApp';
@@ -9,7 +10,7 @@ import { displayCode, orderStatusLabel } from '../../domain/orders';
 import { formatLabel } from '../../domain/booking';
 import { streakText, usageText } from '../../domain/privileges';
 import { formatLocalDate, formatLocalTime, formatPermDateTime, formatPhone, timeLeft } from '../../utils/format';
-import { triggerHaptic } from '../../utils/vkBridge';
+import { scanQrCode, triggerHaptic } from '../../utils/vkBridge';
 import type { Booking, BookingStatus, GuestCard, StaffLookup, VisitType } from '../../types';
 
 function useLookup() {
@@ -34,8 +35,8 @@ function useLookup() {
   return { query, setQuery, result, setResult, error, loading, search };
 }
 
-const SearchBox: React.FC<{ value: string; onChange: (v: string) => void; onSearch: () => void; placeholder: string; loading: boolean }> = ({
-  value, onChange, onSearch, placeholder, loading,
+const SearchBox: React.FC<{ value: string; onChange: (v: string) => void; onSearch: () => void; placeholder: string; loading: boolean; extra?: React.ReactNode }> = ({
+  value, onChange, onSearch, placeholder, loading, extra,
 }) => (
   <form
     className="flex gap-2"
@@ -45,16 +46,30 @@ const SearchBox: React.FC<{ value: string; onChange: (v: string) => void; onSear
     }}
   >
     <input className={inputClass} value={value} placeholder={placeholder} onChange={(e) => onChange(e.target.value)} autoCapitalize="characters" />
+    {extra}
     <Button type="submit" className="!px-3 shrink-0" disabled={loading} aria-label="Найти">
       {loading ? <Spinner className="w-4 h-4" /> : <Search className="w-4 h-4" />}
     </Button>
   </form>
 );
 
-const GuestHeader: React.FC<{ guest: GuestCard }> = ({ guest }) => (
-  <div className="flex items-center justify-between gap-2">
-    <div className="min-w-0">
-      <div className="font-bold truncate">{guest.name}</div>
+/** Фото гостя: официант сверяет его с человеком перед собой. */
+const GuestPhoto: React.FC<{ url: string | null; name: string; large?: boolean }> = ({ url, name, large }) => {
+  const size = large ? 'w-24 h-24 text-3xl' : 'w-11 h-11 text-base';
+  return url ? (
+    <img src={url} alt={name} className={clsx(size, 'rounded-2xl object-cover border-2 border-dr-red/60 shrink-0')} />
+  ) : (
+    <span className={clsx(size, 'rounded-2xl bg-dr-surface border-2 border-dr-border flex items-center justify-center font-black text-dr-muted shrink-0')}>
+      {name.slice(0, 1).toUpperCase()}
+    </span>
+  );
+};
+
+const GuestHeader: React.FC<{ guest: GuestCard; large?: boolean }> = ({ guest, large }) => (
+  <div className="flex items-center gap-3">
+    <GuestPhoto url={guest.photoUrl} name={guest.name} large={large} />
+    <div className="min-w-0 flex-1">
+      <div className={clsx('font-black leading-tight', large ? 'text-xl' : 'truncate')}>{guest.name}</div>
       <div className="text-[11px] text-dr-muted">
         Карта {guest.cardNumber}
         {guest.phone ? ` · ${formatPhone(guest.phone)}` : ''} · визитов: {guest.visitsCount}
@@ -67,11 +82,31 @@ const GuestHeader: React.FC<{ guest: GuestCard }> = ({ guest }) => (
   </div>
 );
 
-/** Выдача подарка по купону #DR-XXXX или привилегии ранга с проверкой недельного лимита. */
+/** Сканер QR в мобильном ВК. На компьютере и в браузере его нет: код вводят вручную. */
+const ScanButton: React.FC<{ onCode: (code: string) => void }> = ({ onCode }) => {
+  const showToast = useApp((s) => s.showToast);
+  return (
+    <Button
+      variant="dark"
+      className="!px-3 shrink-0"
+      aria-label="Сканировать QR-код"
+      onClick={async () => {
+        const code = await scanQrCode();
+        if (code) onCode(code);
+        else showToast('Сканер работает в мобильном приложении ВК. Введите код вручную.');
+      }}
+    >
+      <QrIcon className="w-4 h-4" />
+    </Button>
+  );
+};
+
+/** Выдача подарка по купону #DR-XXXX или привилегии ранга: по временному коду с экрана гостя. */
 export const IssueTool: React.FC = () => {
   const showToast = useApp((s) => s.showToast);
   const lookup = useLookup();
   const [busy, setBusy] = useState(false);
+  const [codes, setCodes] = useState<Record<number, string>>({});
   const now = useNow();
 
   const issueCoupon = async (code: string) => {
@@ -88,13 +123,19 @@ export const IssueTool: React.FC = () => {
     }
   };
 
-  const redeem = async (guest: GuestCard) => {
+  const redeem = async (guest: GuestCard, code: string) => {
     setBusy(true);
     try {
-      const updated = await staffApi.redeemPrivilege(guest.userId);
+      const updated = await staffApi.redeemPrivilege(guest.userId, code);
       triggerHaptic('heavy');
       showToast(`${guest.privilege.label} — выдача записана в журнал.`);
-      lookup.setResult((r) => (r ? { ...r, guests: r.guests.map((g) => (g.userId === updated.userId ? updated : g)) } : r));
+      setCodes((c) => ({ ...c, [guest.userId]: '' }));
+      lookup.setResult((r) => (r ? {
+        ...r,
+        privilegeCode: null,
+        privilegeCodeUserIds: [],
+        guests: r.guests.map((g) => (g.userId === updated.userId ? updated : g)),
+      } : r));
     } catch (e) {
       showToast(apiErrorMessage(e), 'error');
       await lookup.search();
@@ -112,24 +153,35 @@ export const IssueTool: React.FC = () => {
         onChange={lookup.setQuery}
         onSearch={() => lookup.search()}
         loading={lookup.loading}
-        placeholder="#DR-XXXX, номер карты, телефон или имя"
+        placeholder="Код с экрана, #DR-XXXX, карта или имя"
+        extra={
+          <ScanButton
+            onCode={(code) => {
+              lookup.setQuery(code);
+              void lookup.search(code);
+            }}
+          />
+        }
       />
       <ErrorLine text={lookup.error} />
 
       {order && (
         <Card glow={order.order.status === 'Pending'}>
           <div className="text-[11px] uppercase tracking-wider text-dr-muted">Подарок из магазина</div>
-          <div className="text-lg font-black mt-1">
-            {order.order.title}
-          </div>
-          <div className="text-xs text-dr-muted">
-            {displayCode(order.order.code)} · {order.guestName} (карта {order.cardNumber})
+          <div className="flex items-center gap-3 mt-2">
+            <GuestPhoto url={order.photoUrl} name={order.guestName} large />
+            <div className="min-w-0">
+              <div className="text-lg font-black leading-tight">{order.order.title}</div>
+              <div className="text-sm font-bold mt-1">{order.guestName}</div>
+              <div className="text-xs text-dr-muted">{displayCode(order.order.code)} · карта {order.cardNumber}</div>
+            </div>
           </div>
           <div className="mt-2 flex flex-wrap gap-1.5">
             <Pill tone={order.order.status === 'Pending' ? 'green' : 'muted'}>{orderStatusLabel(order.order, now)}</Pill>
             {order.order.status === 'Pending' && <Pill tone="amber">ещё {timeLeft(order.order.expiresAt, now)}</Pill>}
             {order.order.issuedAt && <Pill>выдан {formatPermDateTime(order.order.issuedAt)}</Pill>}
           </div>
+          {order.order.status === 'Pending' && order.order.ageRestricted && <PassportReminder />}
           {order.order.status === 'Pending' && (
             <Button className="w-full mt-3" disabled={busy} onClick={() => issueCoupon(order.order.code)}>
               <Check className="w-4 h-4" /> Подтвердить выдачу
@@ -143,18 +195,39 @@ export const IssueTool: React.FC = () => {
       {lookup.result?.guests.map((g) => {
         const p = g.privilege;
         const streak = streakText(p);
+        const confirmed = lookup.result?.privilegeCodeUserIds.includes(g.userId) ?? false;
+        const code = confirmed ? (lookup.result?.privilegeCode ?? '') : (codes[g.userId] ?? '');
         return (
-          <Card key={g.userId}>
-            <GuestHeader guest={g} />
+          <Card key={g.userId} glow={confirmed}>
+            <GuestHeader guest={g} large />
             <div className="mt-3 rounded-xl bg-dr-surface border border-dr-border p-3">
               <div className="text-[11px] uppercase tracking-wider text-dr-muted">Привилегия ранга {p.rank ? `(#${p.rank})` : ''}</div>
               {p.label ? (
                 <>
-                  <div className="font-black mt-0.5">{p.label}</div>
+                  <div className="font-black mt-0.5 flex items-center gap-1.5 flex-wrap">{p.label} {p.ageRestricted && <AgeBadge />}</div>
                   <div className="text-[11px] text-dr-muted">{p.conditions} · {usageText(p)}</div>
                   {streak && <div className="text-[11px] text-amber-300 font-bold mt-0.5">{streak}</div>}
                   {!p.allowed && p.reason && <div className="text-[11px] text-dr-red-light mt-1">{p.reason}</div>}
-                  <Button className="w-full mt-2" size="sm" disabled={busy || !p.allowed} onClick={() => redeem(g)}>
+                  {p.allowed && p.ageRestricted && <PassportReminder />}
+                  {p.allowed && (
+                    confirmed ? (
+                      <div className="mt-2"><Pill tone="green"><Check className="w-3 h-3" /> Код совпал. Сверьте фото с гостем</Pill></div>
+                    ) : (
+                      <div className="mt-2">
+                        <Field label="Код с экрана гостя" hint="Номера карты недостаточно: код меняется каждую минуту.">
+                          <input
+                            className={`${inputClass} text-center font-black tracking-[0.3em]`}
+                            inputMode="numeric"
+                            maxLength={6}
+                            autoComplete="off"
+                            value={code}
+                            onChange={(e) => setCodes((c) => ({ ...c, [g.userId]: e.target.value.replace(/\D/g, '') }))}
+                          />
+                        </Field>
+                      </div>
+                    )
+                  )}
+                  <Button className="w-full mt-2" size="sm" disabled={busy || !p.allowed || code.length !== 6} onClick={() => redeem(g, code)}>
                     <Check className="w-4 h-4" /> Подтвердить выдачу
                   </Button>
                 </>
@@ -261,6 +334,8 @@ export const VisitTool: React.FC = () => {
   );
 };
 
+const BOOKINGS_REFRESH_MS = 20_000;
+
 /** Заявки на бронь с кнопками «Подтвердить» и «Отклонить». */
 export const BookingsTool: React.FC = () => {
   const showToast = useApp((s) => s.showToast);
@@ -270,6 +345,12 @@ export const BookingsTool: React.FC = () => {
   const [comments, setComments] = useState<Record<number, string>>({});
   const [busyId, setBusyId] = useState<number | null>(null);
   const [version, setVersion] = useState(0);
+
+  // Новые заявки появляются сами: сотрудник не должен обновлять список вручную
+  useEffect(() => {
+    const id = setInterval(() => setVersion((v) => v + 1), BOOKINGS_REFRESH_MS);
+    return () => clearInterval(id);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -308,6 +389,7 @@ export const BookingsTool: React.FC = () => {
     { value: 'Pending', label: 'Ожидают' },
     { value: 'Completed', label: 'Посетили' },
     { value: 'Rejected', label: 'Отклонены' },
+    { value: 'Cancelled', label: 'Отменены гостем' },
   ];
 
   return (
@@ -339,6 +421,7 @@ export const BookingsTool: React.FC = () => {
                 {formatLocalDate(b.date)} · {formatLocalTime(b.time)} · {b.guestsCount} гост.
               </div>
               <div className="text-[11px] text-dr-muted">
+                {b.eventTitle && <span className="block text-dr-red-light font-bold">{b.eventTitle}</span>}
                 {formatLabel(b.format)} · {b.name} ·{' '}
                 <a className="underline" href={`tel:+${b.phone}`}>
                   {formatPhone(b.phone)}

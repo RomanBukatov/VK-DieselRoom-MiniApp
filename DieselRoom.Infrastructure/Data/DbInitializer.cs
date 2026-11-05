@@ -9,6 +9,7 @@ namespace DieselRoom.Infrastructure.Data;
 public static class DbInitializer
 {
     public const long VkGroupId = 34613849;
+    public const string KitchenMenuUrl = "https://vk.ru/album-34613849_258959228";
 
     /// <summary>Версия официального каталога подарков (документ «Призы DIESEL ROOM»).</summary>
     public const int CatalogVersion = 2;
@@ -25,25 +26,25 @@ public static class DbInitializer
     [
         Item(1, "Значок DIESEL ROOM", "Фирменный значок с Красным Муравьём", "badge", 200, 50),
         Item(2, "Кофе", "Любой кофе из барной карты", "coffee", 300, 100),
-        Item(3, "Бокал пива", "Разливное пиво на выбор", "beer", 350, 100),
-        Item(4, "Бокал вина", "Бокал вина из винной карты", "wine", 400, 60),
+        Item(3, "Бокал пива", "Разливное пиво на выбор", "beer", 350, 100, ageRestricted: true),
+        Item(4, "Бокал вина", "Бокал вина из винной карты", "wine", 400, 60, ageRestricted: true),
         Item(5, "Салат «Океаника»", "Тигровые креветки, крокеты из снежного краба, микс салата и соус «Тайгермилк»", "salad", 450, 30,
             "/prizes/salad-oceanika.webp"),
-        Item(6, "Сет из 5 шотов водка-редбул", "Пять шотов для компании", "shots", 500, 30),
+        Item(6, "Сет из 5 шотов водка-редбул", "Пять шотов для компании", "shots", 500, 30, ageRestricted: true),
         Item(7, "Паста «Карбонара»", "Классическая карбонара", "pasta", 550, 30),
         Item(8, "Паста «Шпинатные фетучини с морепродуктами»", "Шпинатные фетучини с морепродуктами", "pasta", 600, 30),
-        Item(9, "1 л коктейля виски-кола", "Литр виски-колы на компанию", "cocktail", 650, 30),
+        Item(9, "1 л коктейля виски-кола", "Литр виски-колы на компанию", "cocktail", 650, 30, ageRestricted: true),
         Item(10, "Пицца на выбор", "Любая пицца из меню", "pizza", 700, 30),
         Item(11, "Сет «Мини»", "Закусочный сет «Мини»", "set", 750, 20),
         Item(12, "Брискет из говядины со шпинатным пюре", "Томлёная говядина и шпинатное пюре", "beef", 800, 20),
         Item(13, "Вин Дизель Бургер + Бокал пива", "Фирменный бургер с двумя котлетами, беконом и тигровыми креветками и бокал пива", "burger", 850, 20,
-            "/prizes/burger-vin-diesel.webp"),
-        Item(14, "Кальян на фрукте", "Кальян на фруктовой чаше", "hookah", 900, 15),
-        Item(15, "Бутылка водочки «Хаски»", "Бутылка водки «Хаски»", "bottle", 950, 10),
-        Item(16, "Сет «БИГ» + 1 литр пива", "Большой закусочный сет и литр пива", "set", 1000, 10),
+            "/prizes/burger-vin-diesel.webp", ageRestricted: true),
+        Item(14, "Кальян на фрукте", "Кальян на фруктовой чаше", "hookah", 900, 15, ageRestricted: true),
+        Item(15, "Бутылка водочки «Хаски»", "Бутылка водки «Хаски»", "bottle", 950, 10, ageRestricted: true),
+        Item(16, "Сет «БИГ» + 1 литр пива", "Большой закусочный сет и литр пива", "set", 1000, 10, ageRestricted: true),
     ];
 
-    private static ShopItem Item(int order, string title, string description, string icon, int price, int stock, string? image = null) =>
+    private static ShopItem Item(int order, string title, string description, string icon, int price, int stock, string? image = null, bool ageRestricted = false) =>
         new()
         {
             Title = title,
@@ -52,6 +53,7 @@ public static class DbInitializer
             ImageUrl = image,
             PriceCoins = price,
             StockCount = stock,
+            AgeRestricted = ageRestricted,
             IsActive = true,
             SortOrder = order,
         };
@@ -73,7 +75,7 @@ public static class DbInitializer
         if (!await db.MenuLinks.AnyAsync(ct))
         {
             db.MenuLinks.AddRange(
-                new MenuLink { Key = "kitchen", Icon = "utensils", Title = "Меню кухни", Url = "https://vk.ru/album-34613849_258959228", SortOrder = 0 },
+                new MenuLink { Key = "kitchen", Icon = "utensils", Title = "Меню кухни", Url = KitchenMenuUrl, SortOrder = 0 },
                 new MenuLink { Key = "bar", Icon = "martini", Title = "Барная карта", Url = "https://vk.ru/album-34613849_261865462", SortOrder = 1 },
                 new MenuLink
                 {
@@ -91,6 +93,7 @@ public static class DbInitializer
                     Tagline = "Спецпредложение · 5 500 ₽",
                     Description = "Новогодняя ночь с банкетом, шоу-программой и танцами до утра.",
                     ProductUrl = "https://vk.ru/market-34613849?w=product-34613849_9277057",
+                    EventDate = new DateOnly(2026, 12, 31),
                     AllowBooking = true,
                     DefaultFormat = BookingFormat.Banquet,
                     SortOrder = 0,
@@ -107,6 +110,8 @@ public static class DbInitializer
                 {
                     Title = "БИЗНЕС-ЛАНЧИ В DIESEL ROOM",
                     Tagline = "Пн–Пт с 12:00 до 16:00 · Сытные обеды и быстрая подача",
+                    ProductUrl = KitchenMenuUrl,
+                    ProductLabel = "Меню бизнес-ланча",
                     AllowBooking = true,
                     DefaultFormat = BookingFormat.Hall,
                     SortOrder = 2,

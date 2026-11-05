@@ -87,7 +87,7 @@ public class StaffAuthService
         if (IsConfiguredAdmin(vkId))
         {
             var named = await FindByVkIdAsync(vkId, ct);
-            return new StaffIdentity(StaffRole.Admin, named?.Id, named?.Name ?? $"Администратор (VK {vkId})", vkId);
+            return new StaffIdentity(StaffRole.Admin, named?.Id, named?.Name ?? $"Администратор (VK {vkId})", vkId, vkId);
         }
 
         if (!string.IsNullOrWhiteSpace(masterKey) && IsMasterKey(masterKey))
@@ -98,12 +98,12 @@ public class StaffAuthService
         var byVk = await FindByVkIdAsync(vkId, ct);
         if (byVk != null)
         {
-            return new StaffIdentity(byVk.Role, byVk.Id, byVk.Name, vkId);
+            return new StaffIdentity(byVk.Role, byVk.Id, byVk.Name, vkId, vkId);
         }
 
         if (ContainsVkId(_options.StaffVkIds, vkId))
         {
-            return new StaffIdentity(StaffRole.Staff, null, $"Сотрудник (VK {vkId})", vkId);
+            return new StaffIdentity(StaffRole.Staff, null, $"Сотрудник (VK {vkId})", vkId, vkId);
         }
 
         if (!string.IsNullOrWhiteSpace(pin))
@@ -118,7 +118,7 @@ public class StaffAuthService
             }
 
             PinFailures.TryRemove(throttleKey, out _);
-            return new StaffIdentity(byPin.Role, byPin.Id, byPin.Name, vkId);
+            return new StaffIdentity(byPin.Role, byPin.Id, byPin.Name, vkId, byPin.VkId);
         }
 
         return StaffIdentity.Guest;

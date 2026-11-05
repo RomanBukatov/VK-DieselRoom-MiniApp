@@ -71,6 +71,7 @@ public class ShopService
             Icon = item.Icon,
             ImageUrl = item.ImageUrl,
             PriceCoins = item.PriceCoins,
+            AgeRestricted = item.AgeRestricted,
             Status = ShopOrderStatus.Pending,
             CreatedAt = now,
             ExpiresAt = now + CouponLifetime,
@@ -171,6 +172,9 @@ public class ShopService
         var order = await _db.ShopOrders.AsNoTracking().FirstOrDefaultAsync(o => o.Code == normalized, ct);
         if (order == null) return OpResult<ShopOrder>.Fail($"Купон #{normalized} не найден.", 404);
 
+        var owner = await _db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == order.UserId, ct);
+        if (staff.IsSelf(owner?.VkId)) return OpResult<ShopOrder>.Fail(StaffIdentity.SelfServiceError, 403);
+
         switch (order.Status)
         {
             case ShopOrderStatus.Issued:
@@ -197,8 +201,7 @@ public class ShopService
                 .SetProperty(o => o.ClosedAt, now), ct);
         if (changed != 1) return OpResult<ShopOrder>.Fail("Купон уже закрыт.", 409);
 
-        var guest = await _db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == order.UserId, ct);
-        StaffAudit.Add(_db, staff, StaffAuditActions.GiftIssued, guest, details: $"{order.Title} · #{order.Code}", now: now);
+        StaffAudit.Add(_db, staff, StaffAuditActions.GiftIssued, owner, details: $"{order.Title} · #{order.Code}", now: now);
         await _db.SaveChangesAsync(ct);
         await tx.CommitAsync(ct);
 
@@ -210,7 +213,7 @@ public class ShopService
     }
 
     /// <summary>Бесплатный купон-приз (спецприз за 7 дней на 1-м месте) — гасится официантом как обычный подарок.</summary>
-    public async Task<ShopOrder> CreatePrizeOrderAsync(int userId, string title, string icon, DateTime now, CancellationToken ct = default)
+    public async Task<ShopOrder> CreatePrizeOrderAsync(int userId, string title, string icon, DateTime now, CancellationToken ct = default, bool ageRestricted = false)
     {
         var order = new ShopOrder
         {
@@ -220,6 +223,7 @@ public class ShopService
             Title = title,
             Icon = icon,
             PriceCoins = 0,
+            AgeRestricted = ageRestricted,
             Status = ShopOrderStatus.Pending,
             CreatedAt = now,
             ExpiresAt = now + PrizeCouponLifetime,

@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'bun:test';
 import { TIERS, rankTone, streakText, tierForRank, usageText } from './privileges';
 import { displayCode, giftsTabOf, groupOrders, normalizeOrderCode, orderStatusLabel } from './orders';
-import { bookingMomentUtc, canGuestCancel, normalizePhone, validateBooking, type BookingForm } from './booking';
+import { bookingMomentUtc, bookingsTabOf, canGuestCancel, initialBookingForm, normalizePhone, validateBooking, type BookingForm } from './booking';
 import { isSafeUrl, visibleMenu } from './afisha';
 import { qrMatrix, qrPath } from './qr';
-import type { MenuLink, ShopOrder } from '../types';
+import type { AfishaEvent, MenuLink, ShopOrder } from '../types';
 
 // Среда 04.11.2026 18:00 по Перми = 13:00 UTC
 const NOW = Date.UTC(2026, 10, 4, 13, 0, 0);
@@ -39,6 +39,11 @@ describe('Привилегии «Гонки недели» (ТЗ п. 4.1)', () =
     for (const t of TIERS) expect(t.icon).toMatch(/^[a-z-]+$/);
   });
 
+  it('18+ — алкоголь и кальян, коктейль раз в 14 дней на вечеринках', () => {
+    expect(TIERS.filter((t) => t.ageRestricted).map((t) => t.tier)).toEqual(['Hookah', 'BeerOrCoffee', 'Cocktail']);
+    expect(tierForRank(40)?.conditions).toBe('1 раз в 14 дней, на вечеринках Пт/Сб');
+  });
+
   it('трекер удержания 1-го места — только у лидера', () => {
     expect(streakText({ rank: 1, firstPlaceStreak: 4, streakTarget: 7 })).toBe('Удержание 1-го места: 4 / 7 дней подряд');
     expect(streakText({ rank: 2, firstPlaceStreak: 4, streakTarget: 7 })).toBeNull();
@@ -46,7 +51,7 @@ describe('Привилегии «Гонки недели» (ТЗ п. 4.1)', () =
 
   it('подпись лимита', () => {
     expect(usageText({ tier: 'BusinessLunch', used: 2, limit: 3 })).toBe('использовано 2 из 3 на этой неделе');
-    expect(usageText({ tier: 'Cocktail', used: 0, limit: 1 })).toBe('использовано 0 из 1 за 2 недели');
+    expect(usageText({ tier: 'Cocktail', used: 0, limit: 1 })).toBe('использовано 0 из 1 за 14 дней');
     expect(usageText({ tier: 'UnlimitedCoffee', used: 9, limit: null })).toBe('без лимита, пока держите место');
     expect(usageText({ tier: 'None', used: 0, limit: 0 })).toBe('');
   });
@@ -65,6 +70,7 @@ const order = (patch: Partial<ShopOrder>): ShopOrder => ({
   issuedAt: null,
   closedAt: null,
   isPrize: false,
+  ageRestricted: false,
   ...patch,
 });
 
@@ -141,6 +147,30 @@ describe('Бронирование', () => {
     expect(normalizePhone('89021234567')).toBe('79021234567');
     expect(normalizePhone('9021234567')).toBe('79021234567');
     expect(normalizePhone('12345')).toBeNull();
+  });
+
+  const event = (patch: Partial<AfishaEvent>): AfishaEvent => ({
+    id: 1, title: 'Новый год', tagline: null, description: null, productUrl: null, productLabel: null, imageUrl: null,
+    eventDate: null, eventTime: null, allowBooking: true, defaultFormat: 'Banquet', isActive: true, sortOrder: 0, ...patch,
+  });
+
+  it('форма подставляет дату, время и формат события', () => {
+    const form = initialBookingForm(event({ eventDate: '2026-12-31', eventTime: '22:00:00' }), 'Анна', '79021234567', NOW);
+    expect(form).toMatchObject({ date: '2026-12-31', time: '22:00', format: 'Banquet', name: 'Анна', phone: '+79021234567' });
+  });
+
+  it('без даты и для прошедшего события — завтра в 20:00', () => {
+    expect(initialBookingForm(null, '', null, NOW)).toMatchObject({ date: '2026-11-05', time: '20:00', format: 'Hall', phone: '' });
+    expect(initialBookingForm(event({ eventDate: '2026-10-01', eventTime: '22:00:00' }), '', null, NOW)).toMatchObject({ date: '2026-11-05', time: '20:00' });
+  });
+
+  it('«Мои брони»: активные и архив', () => {
+    expect(bookingsTabOf({ status: 'Pending', date: '2026-11-04' }, NOW)).toBe('active');
+    expect(bookingsTabOf({ status: 'Confirmed', date: '2026-11-06' }, NOW)).toBe('active');
+    expect(bookingsTabOf({ status: 'Confirmed', date: '2026-11-03' }, NOW)).toBe('archive'); // дата прошла
+    expect(bookingsTabOf({ status: 'Rejected', date: '2026-11-06' }, NOW)).toBe('archive');
+    expect(bookingsTabOf({ status: 'Completed', date: '2026-11-06' }, NOW)).toBe('archive');
+    expect(bookingsTabOf({ status: 'Cancelled', date: '2026-11-06' }, NOW)).toBe('archive');
   });
 
   it('гость отменяет только активные брони', () => {

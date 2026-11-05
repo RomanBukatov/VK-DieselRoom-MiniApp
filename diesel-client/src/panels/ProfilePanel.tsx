@@ -1,10 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { Bell, KeyRound } from 'lucide-react';
+import { Bell, FileText, KeyRound, UserRoundPen } from 'lucide-react';
 import { Button, ErrorLine, SectionTitle, Spinner } from '../components/ui';
+import { LegalDocsSheet } from '../components/LegalModal';
 import { useApp } from '../store/useApp';
 import { WalletCard } from './profile/Wallet';
 import { MyGifts, ShopSection } from './profile/Gifts';
 import { AchievementsGrid, History, MyBookings, ReferralCard, StaffLoginSheet } from './profile/Extras';
+import { EarnPoints, ProfileFormSheet } from './profile/Tasks';
 import { requestGroupMessages } from '../utils/vkBridge';
 
 export const ProfilePanel: React.FC = () => {
@@ -12,6 +14,8 @@ export const ProfilePanel: React.FC = () => {
   const [giftsVersion, setGiftsVersion] = useState(0);
   const [staffLogin, setStaffLogin] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [legalOpen, setLegalOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
 
   useEffect(() => {
     void refreshProfile();
@@ -34,6 +38,9 @@ export const ProfilePanel: React.FC = () => {
   return (
     <div className="px-4 pb-28">
       <WalletCard profile={profile} />
+
+      <SectionTitle>Как заработать баллы</SectionTitle>
+      <EarnPoints profile={profile} />
 
       <SectionTitle>Магазин подарков</SectionTitle>
       <ShopSection
@@ -61,12 +68,18 @@ export const ProfilePanel: React.FC = () => {
       {historyOpen && <History />}
 
       <div className="mt-6 space-y-2">
+        <Button variant="dark" className="w-full" onClick={() => setEditOpen(true)}>
+          <UserRoundPen className="w-4 h-4" /> Изменить профиль
+        </Button>
         <Button
           variant="dark"
           className="w-full"
           onClick={async () => showToast((await requestGroupMessages()) ? 'Уведомления от DIESEL ROOM включены.' : 'Откройте приложение во ВКонтакте, чтобы включить уведомления.')}
         >
           <Bell className="w-4 h-4" /> Уведомления о бронях и рейтинге
+        </Button>
+        <Button variant="ghost" className="w-full" onClick={() => setLegalOpen(true)}>
+          <FileText className="w-4 h-4" /> Условия программы и персональные данные
         </Button>
         {staff ? (
           <Button variant="ghost" className="w-full" onClick={logoutStaff}>
@@ -80,6 +93,8 @@ export const ProfilePanel: React.FC = () => {
       </div>
 
       <StaffLoginSheet open={staffLogin} onClose={() => setStaffLogin(false)} />
+      <LegalDocsSheet open={legalOpen} onClose={() => setLegalOpen(false)} acceptedAt={profile.consentAcceptedAt} />
+      {editOpen && <ProfileFormSheet profile={profile} onClose={() => setEditOpen(false)} />}
     </div>
   );
 };

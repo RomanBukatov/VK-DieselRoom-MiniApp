@@ -43,12 +43,22 @@ namespace DieselRoom.Infrastructure.Migrations
                         .HasMaxLength(2000)
                         .HasColumnType("character varying(2000)");
 
+                    b.Property<DateOnly?>("EventDate")
+                        .HasColumnType("date");
+
+                    b.Property<TimeOnly?>("EventTime")
+                        .HasColumnType("time without time zone");
+
                     b.Property<string>("ImageUrl")
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
 
                     b.Property<bool>("IsActive")
                         .HasColumnType("boolean");
+
+                    b.Property<string>("ProductLabel")
+                        .HasMaxLength(60)
+                        .HasColumnType("character varying(60)");
 
                     b.Property<string>("ProductUrl")
                         .HasMaxLength(500)
@@ -106,6 +116,10 @@ namespace DieselRoom.Infrastructure.Migrations
 
                     b.Property<DateOnly>("Date")
                         .HasColumnType("date");
+
+                    b.Property<string>("EventTitle")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
 
                     b.Property<int>("Format")
                         .HasColumnType("integer");
@@ -176,6 +190,31 @@ namespace DieselRoom.Infrastructure.Migrations
                     b.HasKey("Date");
 
                     b.ToTable("DailyLeaderSnapshots");
+                });
+
+            modelBuilder.Entity("DieselRoom.Domain.Entities.MediaFile", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<byte[]>("Bytes")
+                        .IsRequired()
+                        .HasColumnType("bytea");
+
+                    b.Property<string>("ContentType")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("MediaFiles");
                 });
 
             modelBuilder.Entity("DieselRoom.Domain.Entities.MenuLink", b =>
@@ -268,6 +307,9 @@ namespace DieselRoom.Infrastructure.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
+                    b.Property<long?>("CodeWindow")
+                        .HasColumnType("bigint");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -345,6 +387,9 @@ namespace DieselRoom.Infrastructure.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
+                    b.Property<bool>("AgeRestricted")
+                        .HasColumnType("boolean");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -393,6 +438,9 @@ namespace DieselRoom.Infrastructure.Migrations
                         .HasColumnType("integer");
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<bool>("AgeRestricted")
+                        .HasColumnType("boolean");
 
                     b.Property<DateTime?>("ClosedAt")
                         .HasColumnType("timestamp with time zone");
@@ -553,8 +601,18 @@ namespace DieselRoom.Infrastructure.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
+                    b.Property<DateTime?>("AdultConfirmedAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<string>("CardNumber")
                         .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<DateTime?>("ConsentAcceptedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ConsentVersion")
                         .HasMaxLength(16)
                         .HasColumnType("character varying(16)");
 
@@ -568,6 +626,12 @@ namespace DieselRoom.Infrastructure.Migrations
                         .IsRequired()
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
+
+                    b.Property<DateTime?>("LastApproachAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int?>("LastApproachTier")
+                        .HasColumnType("integer");
 
                     b.Property<int?>("LastKnownWeeklyRank")
                         .HasColumnType("integer");
@@ -590,6 +654,9 @@ namespace DieselRoom.Infrastructure.Migrations
                     b.Property<string>("PhotoUrl")
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
+
+                    b.Property<DateTime?>("ProfileCompletedAt")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<bool>("ReferralRewardPaid")
                         .HasColumnType("boolean");

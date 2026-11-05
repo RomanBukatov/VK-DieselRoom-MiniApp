@@ -77,6 +77,31 @@ export function timeLeft(untilIso: string, nowMs: number): string {
   return `${Math.max(minutes, 1)} мин`;
 }
 
+/** Живой отсчёт: «2 д 05:13:22», «05:13:22»; null — время вышло. */
+export function raceCountdown(untilIso: string | null | undefined, nowMs: number): string | null {
+  const until = parseIso(untilIso);
+  if (!Number.isFinite(until) || until <= nowMs) return null;
+  const total = Math.floor((until - nowMs) / 1000);
+  const days = Math.floor(total / 86_400);
+  const clock = `${pad(Math.floor((total % 86_400) / 3600))}:${pad(Math.floor((total % 3600) / 60))}:${pad(total % 60)}`;
+  return days > 0 ? `${days} д ${clock}` : clock;
+}
+
+export function formatPoints(n: number): string {
+  return `${n.toLocaleString('ru-RU')} ${plural(n, ['очко', 'очка', 'очков'])}`;
+}
+
+/** Код привилегии для чтения вслух: «482 913». */
+export function formatPrivilegeCode(code: string): string {
+  return code.length === 6 ? `${code.slice(0, 3)} ${code.slice(3)}` : code;
+}
+
+/** «31.12.2026» из «2026-12-31». */
+export function formatFullDate(date: string): string {
+  const [y, m, d] = date.split('-');
+  return y && m && d ? `${d}.${m}.${y}` : date;
+}
+
 export function formatPhone(digits: string | null | undefined): string {
   if (!digits || digits.length !== 11) return digits ?? '';
   return `+7 ${digits.slice(1, 4)} ${digits.slice(4, 7)}-${digits.slice(7, 9)}-${digits.slice(9)}`;

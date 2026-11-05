@@ -41,7 +41,13 @@ public class AfishaEvent
     public string? Tagline { get; set; }
     public string? Description { get; set; }
     public string? ProductUrl { get; set; }
+    /// <summary>Подпись кнопки-ссылки: «Меню бизнес-ланча». Пусто — «Подробнее».</summary>
+    public string? ProductLabel { get; set; }
     public string? ImageUrl { get; set; }
+    /// <summary>Дата события (по Перми); подставляется в форму брони. Пусто — регулярное событие.</summary>
+    public DateOnly? EventDate { get; set; }
+    /// <summary>Время начала (по Перми).</summary>
+    public TimeOnly? EventTime { get; set; }
     /// <summary>Показывать кнопку «Забронировать».</summary>
     public bool AllowBooking { get; set; } = true;
     public BookingFormat DefaultFormat { get; set; } = BookingFormat.Hall;
@@ -63,6 +69,8 @@ public class Booking
     public string Phone { get; set; } = string.Empty;
     public string? Wishes { get; set; }
     public int? AfishaEventId { get; set; }
+    /// <summary>Снимок названия события: сотрудник увидит его, даже если карточку афиши потом удалят.</summary>
+    public string? EventTitle { get; set; }
     public BookingStatus Status { get; set; } = BookingStatus.Pending;
     public string? StaffComment { get; set; }
     public string? ProcessedByStaffName { get; set; }

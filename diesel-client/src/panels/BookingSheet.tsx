@@ -1,48 +1,31 @@
 import React, { useState } from 'react';
-import { Phone } from 'lucide-react';
+import { CalendarDays, Phone } from 'lucide-react';
 import { Button, ErrorLine, Field, Sheet, inputClass } from '../components/ui';
-import { BOOKING_FORMATS, validateBooking, type BookingForm } from '../domain/booking';
+import { BOOKING_FORMATS, initialBookingForm, validateBooking, type BookingForm } from '../domain/booking';
 import { guestApi } from '../api/endpoints';
 import { apiErrorMessage } from '../api/client';
 import { useApp } from '../store/useApp';
 import { useNow } from '../store/useNow';
-import { permDateString } from '../utils/format';
+import { formatLocalDate, formatLocalTime, permDateString } from '../utils/format';
 import { requestGroupMessages, triggerHaptic } from '../utils/vkBridge';
 import { BRAND } from '../config/brand';
-import type { AfishaEvent, BookingFormat } from '../types';
+import type { AfishaEvent } from '../types';
 
 interface Props {
-  open: boolean;
   event: AfishaEvent | null;
   onClose: () => void;
   onCreated?: () => void;
 }
 
-const initialForm = (format: BookingFormat, name: string, phone: string | null): BookingForm => ({
-  date: permDateString(Date.now() + 86_400_000),
-  time: '20:00',
-  guestsCount: 2,
-  format,
-  name,
-  phone: phone ? `+${phone}` : '',
-  wishes: '',
-});
-
-/** «Забронировать стол»: дата, время, гости, формат, имя, телефон, пожелания (ТЗ п. 5). */
-export const BookingSheet: React.FC<Props> = ({ open, event, onClose, onCreated }) => {
-  const { profile, showToast } = useApp();
-  const [form, setForm] = useState<BookingForm>(() => initialForm(event?.defaultFormat ?? 'Hall', profile?.firstName ?? '', profile?.phone ?? null));
+/** «Забронировать»: дата, время, гости, формат, имя, телефон, пожелания. Из карточки афиши подставляются событие, дата и формат. */
+export const BookingSheet: React.FC<Props> = ({ event, onClose, onCreated }) => {
+  const { profile, showToast, refreshProfile } = useApp();
+  const [form, setForm] = useState<BookingForm>(() =>
+    initialBookingForm(event, profile?.firstName === 'Гость' ? '' : (profile?.firstName ?? ''), profile?.phone ?? null, Date.now()),
+  );
   const [errors, setErrors] = useState<string[]>([]);
   const [sending, setSending] = useState(false);
-  const [lastEventId, setLastEventId] = useState<number | null | undefined>(undefined);
   const now = useNow(60_000);
-
-  // Новое открытие для другого мероприятия — формат по умолчанию из карточки
-  if (open && lastEventId !== (event?.id ?? null)) {
-    setLastEventId(event?.id ?? null);
-    setForm((f) => ({ ...f, format: event?.defaultFormat ?? f.format }));
-    setErrors([]);
-  }
 
   const update = <K extends keyof BookingForm>(key: K, value: BookingForm[K]) => setForm((f) => ({ ...f, [key]: value }));
 
@@ -67,6 +50,7 @@ export const BookingSheet: React.FC<Props> = ({ open, event, onClose, onCreated 
       });
       triggerHaptic('medium');
       showToast('Заявка отправлена. Подтверждение придёт сообщением от DIESEL ROOM.');
+      void refreshProfile();
       onCreated?.();
       onClose();
     } catch (e) {
@@ -77,8 +61,19 @@ export const BookingSheet: React.FC<Props> = ({ open, event, onClose, onCreated 
   };
 
   return (
-    <Sheet open={open} onClose={onClose} title={event ? `Бронь: ${event.title}` : 'Забронировать стол'}>
+    <Sheet open onClose={onClose} title={event ? 'Бронь на событие' : 'Забронировать стол'}>
       <div className="space-y-3 pb-2">
+        {event && (
+          <div className="rounded-xl bg-dr-red/10 border border-dr-red/40 px-3 py-2">
+            <div className="text-sm font-black leading-snug">{event.title}</div>
+            {event.eventDate && (
+              <div className="text-[11px] text-dr-muted mt-0.5 flex items-center gap-1">
+                <CalendarDays className="w-3 h-3 shrink-0" />
+                {formatLocalDate(event.eventDate)}{event.eventTime ? ` · ${formatLocalTime(event.eventTime)}` : ''}
+              </div>
+            )}
+          </div>
+        )}
         <div className="grid grid-cols-2 gap-3">
           <Field label="Дата">
             <input type="date" className={inputClass} value={form.date} min={permDateString(now)} onChange={(e) => update('date', e.target.value)} />

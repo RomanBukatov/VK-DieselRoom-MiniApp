@@ -127,6 +127,16 @@ export const Sheet: React.FC<React.PropsWithChildren<{ open: boolean; title: str
   );
 };
 
+/** Маркер подарка или привилегии только для совершеннолетних. */
+export const AgeBadge: React.FC = () => <Pill tone="red">18+</Pill>;
+
+/** Напоминание официанту при выдаче алкоголя и кальяна. */
+export const PassportReminder: React.FC = () => (
+  <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 text-amber-300 text-[11px] font-bold px-2.5 py-1.5 mt-2">
+    18+: проверьте паспорт гостя перед выдачей
+  </div>
+);
+
 export const Pill: React.FC<React.PropsWithChildren<{ tone?: 'red' | 'muted' | 'green' | 'amber' }>> = ({ tone = 'muted', children }) => (
   <span
     className={clsx(

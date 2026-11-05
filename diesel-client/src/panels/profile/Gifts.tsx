@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNow } from '../../store/useNow';
 import { Timer } from 'lucide-react';
-import { Button, Card, Empty, ErrorLine, Pill, Segmented, Sheet } from '../../components/ui';
+import { AgeBadge, Button, Card, Empty, ErrorLine, Pill, Segmented, Sheet } from '../../components/ui';
 import { CoinIcon, PrizeVisual } from '../../components/Brand';
 import { QrCode } from '../../components/QrCode';
 import { guestApi } from '../../api/endpoints';
@@ -55,10 +55,11 @@ export const ShopSection: React.FC<{ onPurchased: (order: ShopOrder) => void }> 
               {item.description && <div className="text-[11px] text-dr-muted mt-0.5 line-clamp-2">{item.description}</div>}
               <div className="flex items-center gap-1 mt-2 text-sm font-black">
                 <CoinIcon className="w-4 h-4" /> {item.priceCoins.toLocaleString('ru-RU')}
+                {item.ageRestricted && <span className="ml-auto"><AgeBadge /></span>}
               </div>
               <div className="text-[10px] text-dr-muted">{soldOut ? 'Нет в наличии' : `Осталось: ${item.stockCount}`}</div>
               <Button size="sm" className="mt-2 w-full" disabled={soldOut || !enough} onClick={() => { setError(null); setConfirm(item); }}>
-                {soldOut ? 'Закончился' : enough ? 'Обменять' : 'Не хватает баллов'}
+                {soldOut ? 'Закончился' : enough ? 'Обменять' : `Не хватает ${formatCoins(item.priceCoins - (profile?.coins ?? 0))}`}
               </Button>
               </div>
             </Card>
@@ -76,6 +77,7 @@ export const ShopSection: React.FC<{ onPurchased: (order: ShopOrder) => void }> 
                 Спишется {formatCoins(confirm.priceCoins)}. Купон действует 7 дней — покажите QR-код официанту.
               </div>
               <div className="text-[11px] text-dr-muted mt-1">Передумали? Отмените заказ — баллы вернутся мгновенно.</div>
+              {confirm.ageRestricted && <div className="text-[11px] font-bold text-dr-red-light mt-1">18+: при получении покажите паспорт.</div>}
             </div>
             <ErrorLine text={error} />
             <Button className="w-full" disabled={busy} onClick={() => buy(confirm)}>
@@ -174,6 +176,7 @@ export const MyGifts: React.FC<{ version: number }> = ({ version }) => {
               <Timer className="w-3 h-3" /> Действует ещё {timeLeft(shown.expiresAt, now)} · до {formatPermDateTime(shown.expiresAt)}
             </Pill>
             <div className="text-xs text-dr-muted text-center">Покажите QR-код или продиктуйте код официанту.</div>
+            {shown.ageRestricted && <div className="text-xs font-bold text-dr-red-light text-center">18+: при получении покажите паспорт.</div>}
             <Button variant="dark" className="w-full" disabled={busy} onClick={() => cancel(shown)}>
               {busy ? 'Отменяем…' : shown.priceCoins > 0 ? `Отменить заказ и вернуть ${formatCoins(shown.priceCoins)}` : 'Отказаться от приза'}
             </Button>

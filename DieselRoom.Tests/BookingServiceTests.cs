@@ -76,15 +76,14 @@ public class BookingServiceTests
         Assert.True(confirmed.Ok, confirmed.Error);
         Assert.Equal(BookingStatus.Confirmed, confirmed.Value!.Status);
 
-        var message = Assert.Single(t.Notifier.Sent);
-        Assert.Equal("404", message.VkId);
+        var message = Assert.Single(t.Notifier.Sent, m => m.VkId == "404");
         Assert.Contains("подтверждена", message.Message);
         Assert.Contains("06.11.2026 в 20:00", message.Message);
         Assert.Contains("Стол №5", message.Message);
 
         var rejectAfter = await t.Create().Bookings.RejectAsync(TestDb.Waiter, booking.Id, null, Now.AddMinutes(11));
         Assert.False(rejectAfter.Ok);
-        Assert.Single(t.Notifier.Sent);
+        Assert.Single(t.Notifier.Sent, m => m.VkId == "404");
 
         using var db = t.NewContext();
         var audit = await db.StaffAuditLogs.SingleAsync();
@@ -102,7 +101,7 @@ public class BookingServiceTests
         var rejected = await t.Create().Bookings.RejectAsync(TestDb.Waiter, booking.Id, "Зал закрыт на спецмероприятие", Now);
         Assert.True(rejected.Ok);
         Assert.Equal(BookingStatus.Rejected, rejected.Value!.Status);
-        var message = Assert.Single(t.Notifier.Sent);
+        var message = Assert.Single(t.Notifier.Sent, m => m.VkId == "405");
         Assert.Contains("не получается подтвердить", message.Message);
         Assert.Contains("Зал закрыт", message.Message);
     }
@@ -126,5 +125,68 @@ public class BookingServiceTests
 
         var other = t.AddUser("407");
         Assert.Equal(404, (await t.Create().Bookings.CancelByGuestAsync(other.Id, second.Id, Now)).StatusCode);
+    }
+
+    [Fact]
+    public async Task NewBooking_AlertsAdminsAndStaff_NotTheGuest_WithEventAndContact()
+    {
+        using var t = new TestDb();
+        t.StaffOptions.StaffVkIds.Add("2002");
+        t.AddStaff("Хостес", vkId: "3003");
+        t.AddStaff("Уволен", vkId: "4004", active: false);
+        t.AddStaff("Планшет", pin: "1234");
+        var guest = t.AddUser("408");
+        int eventId;
+        using (var db = t.NewContext())
+        {
+            var ev = new AfishaEvent { Title = "Новый год", DefaultFormat = BookingFormat.Banquet };
+            db.AfishaEvents.Add(ev);
+            await db.SaveChangesAsync();
+            eventId = ev.Id;
+        }
+
+        var created = await t.Create().Bookings.CreateAsync(guest.Id, Valid() with { AfishaEventId = eventId }, Now);
+        Assert.True(created.Ok, created.Error);
+        Assert.Equal("Новый год", created.Value!.EventTitle);
+
+        var recipients = t.Notifier.Sent.Select(m => m.VkId).ToHashSet();
+        Assert.Equal(new HashSet<string?> { "1001", "2002", "3003" }, recipients);
+        var alert = t.Notifier.Sent.First().Message;
+        Assert.Contains("Новая заявка на бронь", alert);
+        Assert.Contains("Событие: Новый год", alert);
+        Assert.Contains("Мария, +79021234567", alert);
+        Assert.Contains("06.11.2026 в 20:00", alert);
+    }
+
+    [Fact]
+    public async Task GuestCancel_AlertsStaff()
+    {
+        using var t = new TestDb();
+        var guest = t.AddUser("409");
+        var booking = (await t.Create().Bookings.CreateAsync(guest.Id, Valid(), Now)).Value!;
+        t.Notifier.Sent.Clear();
+
+        Assert.True((await t.Create().Bookings.CancelByGuestAsync(guest.Id, booking.Id, Now)).Ok);
+        var alert = Assert.Single(t.Notifier.Sent);
+        Assert.Equal("1001", alert.VkId);
+        Assert.Contains("отменил бронь", alert.Message);
+    }
+
+    [Fact]
+    public async Task Confirmation_MentionsTheEvent()
+    {
+        using var t = new TestDb();
+        var guest = t.AddUser("410");
+        int eventId;
+        using (var db = t.NewContext())
+        {
+            var ev = new AfishaEvent { Title = "Караоке-вечер" };
+            db.AfishaEvents.Add(ev);
+            await db.SaveChangesAsync();
+            eventId = ev.Id;
+        }
+        var booking = (await t.Create().Bookings.CreateAsync(guest.Id, Valid() with { AfishaEventId = eventId }, Now)).Value!;
+        await t.Create().Bookings.ConfirmAsync(TestDb.Waiter, booking.Id, null, Now);
+        Assert.Contains(t.Notifier.Sent, m => m.VkId == "410" && m.Message.Contains("Событие: Караоке-вечер"));
     }
 }

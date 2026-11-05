@@ -2,13 +2,14 @@ import React, { useEffect, useState } from 'react';
 import { Copy, Share2, Users } from 'lucide-react';
 import { KeyIcon } from '../../components/Icon';
 import { AntMascot } from '../../components/Brand';
-import { Button, Card, Empty, ErrorLine, Field, Pill, Sheet, inputClass } from '../../components/ui';
+import { Button, Card, Empty, ErrorLine, Field, Pill, Segmented, Sheet, inputClass } from '../../components/ui';
 import { guestApi } from '../../api/endpoints';
 import { apiErrorMessage } from '../../api/client';
 import { useSwr } from '../../store/useSwr';
 import { useApp } from '../../store/useApp';
-import { canGuestCancel, formatLabel } from '../../domain/booking';
-import { buildReferralLink, referralRuleText } from '../../utils/referral';
+import { useNow } from '../../store/useNow';
+import { bookingsTabOf, canGuestCancel, formatLabel, type BookingsTab } from '../../domain/booking';
+import { buildReferralLink, referralRuleText, sanitizeReferralCode } from '../../utils/referral';
 import { formatLocalDate, formatLocalTime, formatPermDateTime } from '../../utils/format';
 import { copyTextToClipboard, shareLinkInVk } from '../../utils/vkBridge';
 import type { Profile } from '../../types';
@@ -17,6 +18,8 @@ export const MyBookings: React.FC<{ version: number }> = ({ version }) => {
   const showToast = useApp((s) => s.showToast);
   const bookings = useSwr('diesel_cached_bookings', guestApi.myBookings, 60 * 60 * 1000);
   const [busyId, setBusyId] = useState<number | null>(null);
+  const [tab, setTab] = useState<BookingsTab>('active');
+  const now = useNow(60_000);
   const reload = bookings.reload;
 
   useEffect(() => {
@@ -36,11 +39,21 @@ export const MyBookings: React.FC<{ version: number }> = ({ version }) => {
     }
   };
 
-  const list = bookings.data ?? [];
+  const all = bookings.data ?? [];
+  const list = all.filter((b) => bookingsTabOf(b, now) === tab);
+  const activeCount = all.filter((b) => bookingsTabOf(b, now) === 'active').length;
   return (
     <div className="space-y-2">
+      <Segmented<BookingsTab>
+        value={tab}
+        onChange={setTab}
+        options={[
+          { value: 'active', label: `Активные${activeCount ? ` · ${activeCount}` : ''}` },
+          { value: 'archive', label: 'Архив' },
+        ]}
+      />
       <ErrorLine text={!bookings.data ? bookings.error : null} onRetry={bookings.reload} />
-      {list.length === 0 && <Empty>Броней пока нет. Забронируйте стол на вкладке «Афиша».</Empty>}
+      {list.length === 0 && <Empty>{tab === 'active' ? 'Активных броней нет. Забронируйте стол на вкладке «Афиша».' : 'В архиве пока пусто.'}</Empty>}
       {list.map((b) => (
         <Card key={b.id} className="!p-3">
           <div className="flex items-start justify-between gap-2">
@@ -51,6 +64,7 @@ export const MyBookings: React.FC<{ version: number }> = ({ version }) => {
               <div className="text-[11px] text-dr-muted">
                 {formatLabel(b.format)} · гостей: {b.guestsCount}
               </div>
+              {b.eventTitle && <div className="text-[11px] text-dr-red-light font-bold mt-0.5">{b.eventTitle}</div>}
               {b.staffComment && <div className="text-[11px] text-white/80 mt-0.5">Комментарий: {b.staffComment}</div>}
             </div>
             <Pill tone={b.status === 'Confirmed' ? 'green' : b.status === 'Pending' ? 'amber' : b.status === 'Rejected' ? 'red' : 'muted'}>
@@ -70,8 +84,26 @@ export const MyBookings: React.FC<{ version: number }> = ({ version }) => {
 
 export const ReferralCard: React.FC<{ profile: Profile }> = ({ profile }) => {
   const showToast = useApp((s) => s.showToast);
+  const setProfile = useApp((s) => s.setProfile);
   const link = buildReferralLink(profile.referral.code);
   const r = profile.referral;
+  const [code, setCode] = useState('');
+  const [codeError, setCodeError] = useState<string | null>(null);
+  const [applying, setApplying] = useState(false);
+
+  const applyCode = async () => {
+    setApplying(true);
+    setCodeError(null);
+    try {
+      setProfile(await guestApi.applyReferral(sanitizeReferralCode(code)));
+      setCode('');
+      showToast('Код друга привязан. Он получит бонус после вашего первого визита.');
+    } catch (e) {
+      setCodeError(apiErrorMessage(e));
+    } finally {
+      setApplying(false);
+    }
+  };
 
   const share = async () => {
     const result = await shareLinkInVk(link);
@@ -103,6 +135,24 @@ export const ReferralCard: React.FC<{ profile: Profile }> = ({ profile }) => {
           <Share2 className="w-3.5 h-3.5" /> Поделиться
         </Button>
       </div>
+      {r.canEnterCode && (
+        <div className="mt-3 pt-3 border-t border-dr-border">
+          <Field label="Вас пригласил друг?" hint="Введите его код в первые сутки, до первого визита.">
+            <div className="flex gap-2">
+              <input
+                className={inputClass}
+                value={code}
+                inputMode="numeric"
+                maxLength={16}
+                placeholder="Код друга, например 100123"
+                onChange={(e) => setCode(e.target.value)}
+              />
+              <Button className="shrink-0 !px-3" disabled={applying || !code.trim()} onClick={applyCode}>Применить</Button>
+            </div>
+          </Field>
+          <div className="mt-2"><ErrorLine text={codeError} /></div>
+        </div>
+      )}
     </Card>
   );
 };
@@ -138,7 +188,7 @@ export const History: React.FC = () => {
           </div>
           <div className="text-right shrink-0">
             <div className={`font-black ${t.coins < 0 ? 'text-dr-muted' : 'text-emerald-400'}`}>{t.coins > 0 ? `+${t.coins}` : t.coins}</div>
-            {t.rating > 0 && <div className="text-[10px] text-dr-red-light">+{t.rating} рейт.</div>}
+            {t.rating !== 0 && <div className="text-[10px] text-dr-red-light">{t.rating > 0 ? `+${t.rating}` : t.rating} рейт.</div>}
           </div>
         </div>
       ))}

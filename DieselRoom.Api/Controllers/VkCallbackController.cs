@@ -13,8 +13,8 @@ using Microsoft.Extensions.Options;
 namespace DieselRoom.Api.Controllers;
 
 /// <summary>
-/// Шлюз Callback API группы DIESEL ROOM: лайк, осмысленный комментарий, репост → баллы и рейтинг.
-/// Антифрод: секретный ключ, только своя группа, минимум 10 букв и 2 слова, не больше 2 оплаченных комментариев
+/// Шлюз Callback API группы DIESEL ROOM: лайк, осмысленный комментарий, репост, опрос, подписка и разрешение
+/// сообщений → баллы и рейтинг. Антифрод: секретный ключ, только своя группа, минимум 10 букв и 2 слова, не больше 2 оплаченных комментариев
 /// за 24 часа, анти-копипаст, отсечка архивных постов, суточный потолок и уникальный индекс от двойных начислений.
 /// </summary>
 [ApiController]
@@ -79,8 +79,49 @@ public class VkCallbackController : ControllerBase
             "wall_reply_new" => await HandleCommentAsync(element.Value, rates),
             "like_add" => await HandleLikeAsync(element.Value, rates),
             "wall_repost" => await HandleRepostAsync(element.Value, rates),
+            "group_join" => await HandleOneTimeAsync(element.Value, OneTimeRewards.GroupJoin, rates.GroupJoinCoins, rates.GroupJoinRating,
+                PointsTransactionTypes.GroupJoinBonus, "Подписка на группу DIESEL ROOM"),
+            "message_allow" => await HandleOneTimeAsync(element.Value, OneTimeRewards.MessageAllow, rates.MessageAllowCoins, rates.MessageAllowRating,
+                PointsTransactionTypes.MessageAllowBonus, "Разрешены сообщения от DIESEL ROOM"),
+            "poll_vote_new" => await HandlePollVoteAsync(element.Value, rates),
             _ => Ok200(),
         };
+    }
+
+    private async Task<IActionResult> HandleOneTimeAsync(JsonElement obj, string activityType, int coins, int rating, string txType, string description)
+    {
+        var vkUserId = GetStringOrNumberProperty(obj, "user_id");
+        if (!IsValidActor(vkUserId)) return Ok200();
+
+        return await WithUserLockAsync(vkUserId!, async user =>
+        {
+            var awarded = await OneTimeRewards.TryAwardAsync(_context, user, activityType, 0, coins, rating, txType, description, Now);
+            _logger.LogInformation("[VK_CALLBACK_AUDIT] Action={Action} Type={Type} VkId={VkId}",
+                awarded ? "RewardAwarded" : "Skipped_AlreadyAwarded", activityType, vkUserId);
+        });
+    }
+
+    private async Task<IActionResult> HandlePollVoteAsync(JsonElement obj, LoyaltyRates rates)
+    {
+        var vkUserId = GetStringOrNumberProperty(obj, "user_id");
+        var pollId = GetIntProperty(obj, "poll_id");
+        var ownerId = GetLongProperty(obj, "owner_id");
+        if (!IsValidActor(vkUserId) || pollId is not > 0) return Ok200();
+
+        // Опрос должен принадлежать нашей группе: на чужие VK события не шлёт, но проверяем
+        if (_options.GroupId > 0 && ownerId.HasValue && ownerId.Value != -_options.GroupId)
+        {
+            _logger.LogInformation("[VK_CALLBACK_AUDIT] Action=Skipped_ForeignPoll VkId={VkId} Owner={Owner}", vkUserId, ownerId);
+            return Ok200();
+        }
+
+        return await WithUserLockAsync(vkUserId!, async user =>
+        {
+            var awarded = await OneTimeRewards.TryAwardAsync(_context, user, OneTimeRewards.Poll, pollId.Value, rates.PollCoins, rates.PollRating,
+                PointsTransactionTypes.PollVote, "Участие в опросе DIESEL ROOM", Now);
+            _logger.LogInformation("[VK_CALLBACK_AUDIT] Action={Action} Type=Poll VkId={VkId} PollId={PollId}",
+                awarded ? "RewardAwarded" : "Skipped_AlreadyAwarded", vkUserId, pollId);
+        });
     }
 
     private async Task<IActionResult> HandleCommentAsync(JsonElement obj, LoyaltyRates rates)
@@ -199,6 +240,13 @@ public class VkCallbackController : ControllerBase
             return Ok200();
         }
 
+        // Участие в программе начинается с принятия условий
+        if (user.ConsentAcceptedAt == null)
+        {
+            _logger.LogInformation("[VK_CALLBACK_AUDIT] Action=Skipped_NoConsent VkId={VkId}", vkUserId);
+            return Ok200();
+        }
+
         var lockKey = $"vk_reward_{trimmed}";
         var sem = Locks.GetOrAdd(lockKey, _ => new SemaphoreSlim(1, 1));
         await sem.WaitAsync();
@@ -233,9 +281,10 @@ public class VkCallbackController : ControllerBase
         string txType, string description, LoyaltyRates rates, string? commentText = null)
     {
         var now = Now;
-        var todayUtc = DateTime.SpecifyKind(now.Date, DateTimeKind.Utc);
+        // Сутки — по Перми (UTC+5): лимит обнуляется в полночь заведения, а не в 05:00
+        var dayStartUtc = PermTime.ToUtc(PermTime.LocalDate(now), TimeOnly.MinValue);
         var earnedToday = await _context.PointsTransactions
-            .Where(t => t.UserId == user.Id && t.CreatedAt >= todayUtc && PointsTransactionTypes.SocialTypes.Contains(t.Type))
+            .Where(t => t.UserId == user.Id && t.CreatedAt >= dayStartUtc && PointsTransactionTypes.SocialTypes.Contains(t.Type))
             .SumAsync(t => (int?)t.Coins) ?? 0;
         if (earnedToday >= rates.DailySocialCoinsCap)
         {

@@ -51,8 +51,8 @@ public class StaffController : ControllerBase
     public ActionResult<StaffSessionDto> Session() => new StaffSessionDto(Staff.Role, Staff.Name);
 
     /// <summary>
-    /// Поиск по коду купона (#DR-XXXX) и/или гостю: номер карты, телефон, имя, VK ID. Для каждого гостя —
-    /// текущая привилегия ранга с проверкой недельного лимита.
+    /// Поиск по коду купона (#DR-XXXX), коду привилегии и/или гостю: номер карты, телефон, имя, VK ID. Для каждого
+    /// гостя — текущая привилегия ранга с проверкой лимита.
     /// </summary>
     [HttpGet("lookup")]
     public async Task<ActionResult<StaffLookupDto>> Lookup([FromQuery] string? q, CancellationToken ct)
@@ -73,15 +73,26 @@ public class StaffController : ControllerBase
                     order = await _db.ShopOrders.AsNoTracking().FirstAsync(o => o.Id == order.Id, ct);
                 }
                 var owner = await _db.Users.AsNoTracking().FirstAsync(u => u.Id == order.UserId, ct);
-                orderDto = new StaffOrderDto(ShopOrderDto.From(order), owner.Id, owner.DisplayName, owner.CardNumber);
+                orderDto = new StaffOrderDto(ShopOrderDto.From(order), owner.Id, owner.DisplayName, owner.CardNumber, owner.PhotoUrl);
             }
+        }
+
+        // Код привилегии: код с экрана гостя (или из QR) сразу находит того, кому он выдан
+        var privilegeCode = Codes.NormalizePrivilegeCode(query, out var fromQr);
+        var codeOwners = privilegeCode == null ? [] : await _privileges.FindByCodeAsync(privilegeCode, Now, ct);
+        if (fromQr)
+        {
+            var owners = await _db.Users.AsNoTracking().Where(u => codeOwners.Contains(u.Id)).ToListAsync(ct);
+            var ownerCards = new List<GuestCardDto>();
+            foreach (var owner in owners) ownerCards.Add(await _profiles.BuildGuestCardAsync(owner, Now, ct));
+            return new StaffLookupDto(null, ownerCards, codeOwners.Count > 0 ? privilegeCode : null, codeOwners);
         }
 
         var digits = new string(query.Where(char.IsDigit).ToArray());
         var phone = Codes.NormalizePhone(query);
         var lowered = query.ToLowerInvariant();
         var guests = await _db.Users.AsNoTracking()
-            .Where(u => u.CardNumber == query || u.VkId == digits ||
+            .Where(u => codeOwners.Contains(u.Id) || u.CardNumber == query || u.VkId == digits ||
                         (phone != null && u.Phone == phone) ||
                         (digits.Length >= 4 && u.Phone != null && u.Phone.EndsWith(digits)) ||
                         (query.Length >= 3 && (u.FirstName.ToLower().Contains(lowered) || u.LastName.ToLower().Contains(lowered) ||
@@ -95,7 +106,8 @@ public class StaffController : ControllerBase
         {
             cards.Add(await _profiles.BuildGuestCardAsync(guest, Now, ct));
         }
-        return new StaffLookupDto(orderDto, cards);
+        return new StaffLookupDto(orderDto, cards.OrderByDescending(c => codeOwners.Contains(c.UserId)).ToList(),
+            codeOwners.Count > 0 ? privilegeCode : null, codeOwners);
     }
 
     /// <summary>Подтвердить выдачу подарка по купону #DR-XXXX.</summary>
@@ -106,11 +118,11 @@ public class StaffController : ControllerBase
         return result.Ok ? ShopOrderDto.From(result.Value!) : Error(result.Error, result.StatusCode);
     }
 
-    /// <summary>Подтвердить использование недельной привилегии ранга (лимиты проверяются в момент выдачи).</summary>
+    /// <summary>Подтвердить выдачу привилегии кодом с экрана гостя (код и лимиты проверяются в момент выдачи).</summary>
     [HttpPost("privileges/redeem")]
     public async Task<ActionResult<GuestCardDto>> RedeemPrivilege([FromBody] RedeemPrivilegeRequest request, CancellationToken ct)
     {
-        var result = await _privileges.RedeemAsync(Staff, request.UserId, Now, ct);
+        var result = await _privileges.RedeemAsync(Staff, request.UserId, request.Code, Now, ct);
         if (!result.Ok) return Error(result.Error, result.StatusCode);
         var guest = await _db.Users.AsNoTracking().FirstAsync(u => u.Id == request.UserId, ct);
         return await _profiles.BuildGuestCardAsync(guest, Now, ct);

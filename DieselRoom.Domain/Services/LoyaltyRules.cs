@@ -21,6 +21,20 @@ public sealed record LoyaltyRates
     public int DailySocialCoinsCap { get; init; } = 30;
     /// <summary>Записи стены с меньшим post_id считаются архивными: за них ничего не начисляется.</summary>
     public int MinRewardPostId { get; init; } = 0;
+    /// <summary>Разовый бонус за заполненный профиль (имя и телефон).</summary>
+    public int ProfileBonusCoins { get; init; } = 30;
+    public int ProfileBonusRating { get; init; } = 5;
+    /// <summary>Разовый бонус за подписку на группу.</summary>
+    public int GroupJoinCoins { get; init; } = 20;
+    public int GroupJoinRating { get; init; } = 5;
+    /// <summary>Разовый бонус за разрешение сообщений от группы.</summary>
+    public int MessageAllowCoins { get; init; } = 20;
+    public int MessageAllowRating { get; init; } = 5;
+    /// <summary>За участие в опросе группы: один раз на опрос.</summary>
+    public int PollCoins { get; init; } = 5;
+    public int PollRating { get; init; } = 2;
+    /// <summary>Предупреждать «До приза осталось X очков», когда до следующей призовой зоны не больше стольких очков; 0 — выключено.</summary>
+    public int ApproachNotifyPoints { get; init; } = 15;
 
     public static readonly LoyaltyRates Default = new();
 
@@ -34,6 +48,11 @@ public sealed record LoyaltyRates
                      (nameof(VisitCoins), VisitCoins), (nameof(VisitRating), VisitRating),
                      (nameof(ReferralCoins), ReferralCoins), (nameof(ReferralRating), ReferralRating),
                      (nameof(MaxPaidCommentsPer24h), MaxPaidCommentsPer24h), (nameof(DailySocialCoinsCap), DailySocialCoinsCap),
+                     (nameof(ProfileBonusCoins), ProfileBonusCoins), (nameof(ProfileBonusRating), ProfileBonusRating),
+                     (nameof(GroupJoinCoins), GroupJoinCoins), (nameof(GroupJoinRating), GroupJoinRating),
+                     (nameof(MessageAllowCoins), MessageAllowCoins), (nameof(MessageAllowRating), MessageAllowRating),
+                     (nameof(PollCoins), PollCoins), (nameof(PollRating), PollRating),
+                     (nameof(ApproachNotifyPoints), ApproachNotifyPoints),
                  })
         {
             if (value < 0 || value > 10_000) yield return $"{name}: значение должно быть от 0 до 10000.";
@@ -116,6 +135,105 @@ public static class Codes
         if (digits.Length == 11 && digits[0] == '8') digits = "7" + digits[1..];
         return digits.Length == 11 && digits[0] == '7' ? digits : null;
     }
+
+    private static readonly Regex PrivilegeCodeRegex = new(@"^(?<prefix>[PpРрПп]\s*-?\s*)?(?<a>\d{3})[\s-]?(?<b>\d{3})$", RegexOptions.Compiled);
+
+    /// <summary>«P-482913», «482 913» → «482913»; иначе null. <paramref name="prefixed"/> — код из QR, а не просто шесть цифр.</summary>
+    public static string? NormalizePrivilegeCode(string? input, out bool prefixed)
+    {
+        prefixed = false;
+        if (string.IsNullOrWhiteSpace(input)) return null;
+        var match = PrivilegeCodeRegex.Match(input.Trim());
+        if (!match.Success) return null;
+        prefixed = match.Groups["prefix"].Success;
+        return match.Groups["a"].Value + match.Groups["b"].Value;
+    }
+}
+
+/// <summary>Склонения в сообщениях гостям.</summary>
+public static class RuText
+{
+    public static string Points(int n)
+    {
+        var abs = Math.Abs(n) % 100;
+        var last = abs % 10;
+        if (abs is > 10 and < 20) return $"{n} очков";
+        return last switch
+        {
+            1 => $"{n} очко",
+            >= 2 and <= 4 => $"{n} очка",
+            _ => $"{n} очков",
+        };
+    }
+
+    /// <summary>«со 2-го места», «с 3-го места».</summary>
+    public static string FromPlace(int rank) => $"{(rank == 2 ? "со" : "с")} {rank}-го места";
+}
+
+/// <summary>Редакция условий программы и согласия на обработку персональных данных. Новая редакция — новое согласие.</summary>
+public static class LegalInfo
+{
+    public const string CurrentVersion = "2026-11";
+
+    public static bool HasCurrentConsent(Entities.User user) =>
+        user.ConsentAcceptedAt != null && user.AdultConfirmedAt != null && user.ConsentVersion == CurrentVersion;
+}
+
+/// <summary>Порог уровня гостя: от скольких очков «за всё время» он начинается.</summary>
+public sealed record LevelRule(string Title, int MinRating);
+
+/// <summary>Уровень гостя и прогресс до следующего.</summary>
+public sealed record GuestLevel(int Index, string Title, int MinRating, string? NextTitle, int? NextMinRating, int ProgressPercent, int? PointsToNext);
+
+/// <summary>Уровни гостя считаются по очкам «за всё время»: они не обнуляются и не уменьшаются при покупках.</summary>
+public static class GuestLevels
+{
+    public const int MaxTitleLength = 40;
+
+    public static readonly IReadOnlyList<LevelRule> Default =
+    [
+        new("Гость", 0),
+        new("Свой", 100),
+        new("Резидент", 500),
+        new("Легенда Дизеля", 1500),
+    ];
+
+    public static IEnumerable<string> Validate(IReadOnlyList<LevelRule>? levels)
+    {
+        if (levels is not { Count: >= 2 and <= 8 })
+        {
+            yield return "Нужно от 2 до 8 уровней.";
+            yield break;
+        }
+        if (levels[0].MinRating != 0) yield return "Первый уровень начинается с 0 очков.";
+        for (var i = 0; i < levels.Count; i++)
+        {
+            if (string.IsNullOrWhiteSpace(levels[i].Title) || levels[i].Title.Trim().Length > MaxTitleLength)
+                yield return $"Название уровня: от 1 до {MaxTitleLength} символов.";
+            if (i > 0 && levels[i].MinRating <= levels[i - 1].MinRating)
+                yield return "Каждый следующий уровень должен начинаться с большего числа очков.";
+        }
+    }
+
+    public static GuestLevel Compute(int totalRating, IReadOnlyList<LevelRule> levels)
+    {
+        var index = 0;
+        for (var i = 0; i < levels.Count; i++)
+        {
+            if (totalRating >= levels[i].MinRating) index = i;
+        }
+
+        var current = levels[index];
+        if (index == levels.Count - 1)
+        {
+            return new GuestLevel(index, current.Title, current.MinRating, null, null, 100, null);
+        }
+
+        var next = levels[index + 1];
+        var percent = (totalRating - current.MinRating) * 100 / (next.MinRating - current.MinRating);
+        return new GuestLevel(index, current.Title, current.MinRating, next.Title, next.MinRating,
+            Math.Clamp(percent, 0, 100), next.MinRating - totalRating);
+    }
 }
 
 /// <summary>Достижения гостя: вычисляются из статистики, отдельной таблицы не требуют.</summary>
@@ -129,7 +247,7 @@ public static class Achievements
         [
             new("first_visit", "door", "Первый визит", "Первый визит по чеку", visits >= 1, Math.Min(visits, 1), 1),
             new("visits_5", "flame", "5 посещений", "5 визитов по чекам", visits >= 5, Math.Min(visits, 5), 5),
-            new("visits_10", "ant", "Свой в Diesel Room", "10 визитов по чекам", visits >= 10, Math.Min(visits, 10), 10),
+            new("visits_10", "ant", "10 посещений", "10 визитов по чекам", visits >= 10, Math.Min(visits, 10), 10),
             new("first_friend", "users", "Привёл друга", "Друг пришёл по вашей ссылке", paidReferrals >= 1, Math.Min(paidReferrals, 1), 1),
             new("first_gift", "gift", "Первый подарок", "Получили подарок из магазина", giftsReceived >= 1, Math.Min(giftsReceived, 1), 1),
             new("podium", "trophy", "Пьедестал", "Топ-3 недельной гонки", bestWeeklyRank is >= 1 and <= 3, bestWeeklyRank is >= 1 and <= 3 ? 1 : 0, 1),

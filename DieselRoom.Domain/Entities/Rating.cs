@@ -13,6 +13,8 @@ public class PrivilegeRedemption
     public int RankAtRedemption { get; set; }
     public int? StaffMemberId { get; set; }
     public string StaffName { get; set; } = string.Empty;
+    /// <summary>Окно проверочного кода, которым подтверждена выдача: один код нельзя предъявить дважды.</summary>
+    public long? CodeWindow { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }
 

@@ -20,6 +20,7 @@ public class AppDbContext : DbContext
     public DbSet<Booking> Bookings => Set<Booking>();
     public DbSet<ShopItem> ShopItems => Set<ShopItem>();
     public DbSet<ShopOrder> ShopOrders => Set<ShopOrder>();
+    public DbSet<MediaFile> MediaFiles => Set<MediaFile>();
     public DbSet<Visit> Visits => Set<Visit>();
     public DbSet<PrivilegeRedemption> PrivilegeRedemptions => Set<PrivilegeRedemption>();
     public DbSet<WeeklyRaceResult> WeeklyRaceResults => Set<WeeklyRaceResult>();
@@ -39,6 +40,7 @@ public class AppDbContext : DbContext
             e.Property(u => u.LastName).HasMaxLength(100);
             e.Property(u => u.PhotoUrl).HasMaxLength(500);
             e.Property(u => u.Phone).HasMaxLength(16);
+            e.Property(u => u.ConsentVersion).HasMaxLength(16);
             e.Ignore(u => u.DisplayName);
             e.HasIndex(u => u.VkId).IsUnique();
             e.HasIndex(u => u.CardNumber).IsUnique();
@@ -96,6 +98,7 @@ public class AppDbContext : DbContext
             e.Property(a => a.Tagline).HasMaxLength(300);
             e.Property(a => a.Description).HasMaxLength(2000);
             e.Property(a => a.ProductUrl).HasMaxLength(500);
+            e.Property(a => a.ProductLabel).HasMaxLength(60);
             e.Property(a => a.ImageUrl).HasMaxLength(500);
         });
 
@@ -104,6 +107,7 @@ public class AppDbContext : DbContext
             e.Property(b => b.Name).HasMaxLength(60).IsRequired();
             e.Property(b => b.Phone).HasMaxLength(16).IsRequired();
             e.Property(b => b.Wishes).HasMaxLength(500);
+            e.Property(b => b.EventTitle).HasMaxLength(200);
             e.Property(b => b.StaffComment).HasMaxLength(300);
             e.Property(b => b.ProcessedByStaffName).HasMaxLength(100);
             e.HasIndex(b => new { b.Status, b.Date });
@@ -117,6 +121,12 @@ public class AppDbContext : DbContext
             e.Property(i => i.Icon).HasMaxLength(32);
             e.Property(i => i.ImageUrl).HasMaxLength(300);
             e.ToTable(t => t.HasCheckConstraint("CK_ShopItems_StockCount", "\"StockCount\" >= 0"));
+        });
+
+        modelBuilder.Entity<MediaFile>(e =>
+        {
+            e.Property(m => m.ContentType).HasMaxLength(32).IsRequired();
+            e.Property(m => m.Bytes).IsRequired();
         });
 
         modelBuilder.Entity<ShopOrder>(e =>

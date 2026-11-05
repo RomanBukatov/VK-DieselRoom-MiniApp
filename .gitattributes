@@ -1,5 +1,5 @@
 # Исключение автосгенерированных файлов миграций EF Core из статистики Linguist
-PokerClub.Infrastructure/Migrations/* linguist-generated=true
+DieselRoom.Infrastructure/Migrations/* linguist-generated=true
 *.Designer.cs linguist-generated=true
 *ModelSnapshot.cs linguist-generated=true
 

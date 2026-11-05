@@ -12,6 +12,11 @@ public sealed record RankedGuest(int Rank, int UserId, string VkId, string Name,
 
 public sealed record DisplacementNotice(int UserId, string VkId, int OldRank, int NewRank, int PointsToReturn, string Message);
 
+public sealed record ApproachNotice(int UserId, string VkId, PrivilegeTier Goal, int PointsLeft, string Message);
+
+/// <summary>Сколько осталось гостю: до следующего места и до следующей призовой зоны. null — обгонять некого или очков ещё нет.</summary>
+public sealed record RaceProgress(int? PointsToNextPlace, int? NextRank, string? NextPrizeTitle, int? NextPrizeRank, int? PointsToNextPrize);
+
 /// <summary>
 /// «Гонка недели» и «За всё время»: места, переходящие привилегии (п. 4.1), трекер удержания 1-го места,
 /// уведомления о смещении из призового тира и еженедельный сброс (воскресенье 23:59 по Перми).
@@ -19,8 +24,11 @@ public sealed record DisplacementNotice(int UserId, string VkId, int OldRank, in
 public class RatingService
 {
     public static readonly TimeSpan DisplacementNotifyCooldown = TimeSpan.FromHours(6);
+    public static readonly TimeSpan ApproachNotifyCooldown = TimeSpan.FromHours(12);
     /// <summary>Сколько мест за пределами призовой зоны пересчитываем для уведомлений о смещении.</summary>
     private const int TrackedRanks = PrivilegeCatalog.LastPrizeRank + 30;
+    /// <summary>Сколько мест проверяем на приближение к призовой зоне.</summary>
+    private const int ApproachTrackedRanks = PrivilegeCatalog.LastPrizeRank + 150;
 
     private readonly AppDbContext _db;
     private readonly ShopService _shop;
@@ -84,6 +92,20 @@ public class RatingService
         return ahead + 1;
     }
 
+    /// <summary>Плашка «До следующего места X очков» и ближайшая призовая зона. При равенстве очков выше тот, кто набрал раньше, поэтому нужно на 1 очко больше.</summary>
+    public async Task<RaceProgress> GetRaceProgressAsync(User me, int? rank, CancellationToken ct = default)
+    {
+        if (rank is null or <= 1) return new RaceProgress(null, null, null, null, null);
+
+        var ratings = await WeeklyOrdered().Take(rank.Value - 1).Select(u => u.WeeklyRating).ToListAsync(ct);
+        var pointsToNextPlace = ratings[^1] - me.WeeklyRating + 1;
+
+        var goal = PrivilegeCatalog.NextTierAbove(rank.Value);
+        return goal == null
+            ? new RaceProgress(pointsToNextPlace, rank - 1, null, null, null)
+            : new RaceProgress(pointsToNextPlace, rank - 1, goal.Title, goal.BottomRank, ratings[goal.BottomRank - 1] - me.WeeklyRating + 1);
+    }
+
     /// <summary>
     /// «Удержание 1-го места: X / 7 дней подряд». Сегодняшний день засчитывается, пока гость держит 1-е место.
     /// </summary>
@@ -143,7 +165,7 @@ public class RatingService
         if (snapshot.StreakPrizeAwarded)
         {
             prize = await _shop.CreatePrizeOrderAsync(leader.Id,
-                PrivilegeCatalog.FirstPlaceStreakPrizeTitle, PrivilegeCatalog.FirstPlaceStreakPrizeIcon, now, ct);
+                PrivilegeCatalog.FirstPlaceStreakPrizeTitle, PrivilegeCatalog.FirstPlaceStreakPrizeIcon, now, ct, ageRestricted: true);
         }
         await tx.CommitAsync(ct);
 
@@ -162,6 +184,8 @@ public class RatingService
     /// <summary>
     /// Сравнивает текущие места с последними известными и готовит уведомления тем, кто выпал из своего призового тира
     /// (не чаще 1 раза в 6 часов на гостя). Сохраняет новые места. Отправка — на вызывающем.
+    /// Смещение во время паузы не теряется: прежнее место остаётся в базе, и гость узнает о потере, как только пауза
+    /// кончится. Если за это время он вернул себе тир, сообщать уже не о чем.
     /// </summary>
     public async Task<List<DisplacementNotice>> DetectDisplacementsAsync(DateTime now, CancellationToken ct = default)
     {
@@ -187,14 +211,16 @@ public class RatingService
                                    newRank > guest.LastKnownWeeklyRank && (newTier == PrivilegeTier.None || newTier > oldTier);
             var cooledDown = guest.LastRankNotifiedAt == null || now - guest.LastRankNotifiedAt.Value >= DisplacementNotifyCooldown;
 
-            if (droppedOutOfTier && cooledDown)
+            if (droppedOutOfTier && !cooledDown) continue;
+
+            if (droppedOutOfTier)
             {
                 // Чтобы вернуть привилегию, нужно обойти гостя, который сейчас стоит на последнем месте старого тира
-                var targetRank = PrivilegeCatalog.Get(oldTier)!.BottomRank;
-                var target = top.FirstOrDefault(t => t.Rank == targetRank);
+                var lost = PrivilegeCatalog.Get(oldTier)!;
+                var target = top.FirstOrDefault(t => t.Rank == lost.BottomRank);
                 var diff = Math.Max(1, (target?.Rating ?? guest.WeeklyRating) - guest.WeeklyRating + 1);
                 notices.Add(new DisplacementNotice(guest.Id, guest.VkId, guest.LastKnownWeeklyRank!.Value, newRank!.Value, diff,
-                    BuildDisplacementMessage(newRank.Value, diff)));
+                    BuildDisplacementMessage(guest.LastKnownWeeklyRank.Value, newRank.Value, lost.Label, diff)));
 
                 await _db.Users.Where(u => u.Id == guest.Id).ExecuteUpdateAsync(s => s
                     .SetProperty(u => u.LastKnownWeeklyRank, storedRank)
@@ -210,9 +236,51 @@ public class RatingService
         return notices;
     }
 
-    public static string BuildDisplacementMessage(int newRank, int diff) =>
-        $"Вас обошли в недельном рейтинге Diesel Room! Вы переместились на #{newRank} место. " +
-        $"Наберите ещё {diff} очков, чтобы вернуть свою привилегию!";
+    public static string BuildDisplacementMessage(int oldRank, int newRank, string privilege, int diff) =>
+        $"Вас сместили {RuText.FromPlace(oldRank)}! Привилегия «{privilege}» больше недоступна: сейчас вы на {newRank}-м месте. " +
+        $"Наберите ещё {RuText.Points(diff)}, чтобы вернуть её.";
+
+    public static string BuildApproachMessage(string goal, int pointsLeft) =>
+        $"До {goal} осталось всего {RuText.Points(pointsLeft)}!";
+
+    /// <summary>
+    /// Уведомление о приближении: гостю не хватает нескольких очков до следующей призовой зоны. На каждую цель —
+    /// не больше одного раза за неделю, и не чаще 1 раза в 12 часов. <paramref name="skipUserIds"/> — кому только что
+    /// ушло сообщение о смещении: два сообщения подряд ни к чему. Отправка — на вызывающем.
+    /// </summary>
+    public async Task<List<ApproachNotice>> DetectApproachesAsync(DateTime now, IReadOnlySet<int>? skipUserIds = null, CancellationToken ct = default)
+    {
+        var threshold = (await _settings.GetRatesAsync(ct)).ApproachNotifyPoints;
+        if (threshold <= 0) return [];
+
+        var top = await GetWeeklyTopAsync(ApproachTrackedRanks, ct);
+        var ids = top.Select(g => g.UserId).ToList();
+        var state = await _db.Users.AsNoTracking()
+            .Where(u => ids.Contains(u.Id))
+            .Select(u => new { u.Id, u.LastApproachTier, u.LastApproachAt })
+            .ToDictionaryAsync(u => u.Id, ct);
+
+        var notices = new List<ApproachNotice>();
+        foreach (var guest in top)
+        {
+            var goal = PrivilegeCatalog.NextTierAbove(guest.Rank);
+            if (goal == null || skipUserIds?.Contains(guest.UserId) == true) continue;
+
+            var pointsLeft = top[goal.BottomRank - 1].Rating - guest.Rating + 1;
+            if (pointsLeft > threshold) continue;
+
+            var seen = state[guest.UserId];
+            // Чем лучше приз, тем меньше номер тира: о той же или более скромной цели на этой неделе уже говорили
+            if (seen.LastApproachTier is { } last && goal.Tier >= last) continue;
+            if (seen.LastApproachAt is { } at && now - at < ApproachNotifyCooldown) continue;
+
+            notices.Add(new ApproachNotice(guest.UserId, guest.VkId, goal.Tier, pointsLeft, BuildApproachMessage(goal.Goal, pointsLeft)));
+            await _db.Users.Where(u => u.Id == guest.UserId).ExecuteUpdateAsync(s => s
+                .SetProperty(u => u.LastApproachTier, goal.Tier)
+                .SetProperty(u => u.LastApproachAt, now), ct);
+        }
+        return notices;
+    }
 
     /// <summary>
     /// Еженедельный сброс: если прошедшая неделя ещё не закрыта — архивирует её итоги и обнуляет WeeklyRating
@@ -251,11 +319,12 @@ public class RatingService
         await _db.SaveChangesAsync(ct);
 
         await _db.Users
-            .Where(u => u.WeeklyRating != 0 || u.LastKnownWeeklyRank != null)
+            .Where(u => u.WeeklyRating != 0 || u.LastKnownWeeklyRank != null || u.LastApproachTier != null)
             .ExecuteUpdateAsync(s => s
                 .SetProperty(u => u.WeeklyRating, 0)
                 .SetProperty(u => u.WeeklyRatingUpdatedAt, (DateTime?)null)
-                .SetProperty(u => u.LastKnownWeeklyRank, (int?)null), ct);
+                .SetProperty(u => u.LastKnownWeeklyRank, (int?)null)
+                .SetProperty(u => u.LastApproachTier, (PrivilegeTier?)null), ct);
 
         await _settings.SetAsync(SettingsService.LastClosedWeekKey, weekToClose.ToString("yyyy-MM-dd"), ct);
         await tx.CommitAsync(ct);

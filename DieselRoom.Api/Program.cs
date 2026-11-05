@@ -67,6 +67,12 @@ builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton<IGuestNotifier>(sp => new VkGuestNotifier(
     sp.GetRequiredService<IOptions<VkOptions>>().Value.CommunityToken,
     sp.GetRequiredService<ILogger<VkGuestNotifier>>()));
+builder.Services.AddSingleton<IVkCommunityApi>(sp =>
+{
+    var vk = sp.GetRequiredService<IOptions<VkOptions>>().Value;
+    return new VkCommunityApi(vk.CommunityToken, vk.GroupId, sp.GetRequiredService<ILogger<VkCommunityApi>>());
+});
+builder.Services.AddScoped<StaffAlertService>();
 builder.Services.AddScoped<IVkAuthValidator, VkAuthValidator>();
 builder.Services.AddScoped<StaffAuthService>();
 builder.Services.AddScoped<SettingsService>();

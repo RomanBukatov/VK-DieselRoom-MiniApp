@@ -1,4 +1,5 @@
 using DieselRoom.Domain.Entities;
+using DieselRoom.Domain.Services;
 using DieselRoom.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 
@@ -36,9 +37,9 @@ public class UserService
                 VkId = vkId,
                 // Временный уникальный номер: настоящий зависит от Id и проставляется сразу после вставки
                 CardNumber = "T" + Guid.NewGuid().ToString("N")[..12],
-                FirstName = Clean(request.FirstName, 100) ?? "Гость",
-                LastName = Clean(request.LastName, 100) ?? string.Empty,
-                PhotoUrl = CleanUrl(request.PhotoUrl),
+                // Имя и фото сохраняем только после согласия на обработку персональных данных (152-ФЗ)
+                FirstName = "Гость",
+                LastName = string.Empty,
                 CreatedAt = now,
                 LastSeenAt = now,
             };
@@ -64,18 +65,78 @@ public class UserService
 
     private async Task<User> UpdateProfileAsync(User user, GuestSyncRequest request, DateTime now, CancellationToken ct)
     {
-        var first = Clean(request.FirstName, 100);
-        var last = Clean(request.LastName, 100);
-        if (first != null) user.FirstName = first;
-        if (last != null) user.LastName = last;
-        var photo = CleanUrl(request.PhotoUrl);
-        if (photo != null) user.PhotoUrl = photo;
+        if (user.ConsentAcceptedAt != null)
+        {
+            // Имя, которое гость указал в профиле сам, данные ВК не перезаписывают
+            if (user.ProfileCompletedAt == null)
+            {
+                var first = Clean(request.FirstName, 100);
+                var last = Clean(request.LastName, 100);
+                if (first != null) user.FirstName = first;
+                if (last != null) user.LastName = last;
+            }
+            var photo = CleanUrl(request.PhotoUrl);
+            if (photo != null) user.PhotoUrl = photo;
+        }
         user.LastSeenAt = now;
 
         await TryAttachReferralAsync(user, request.ReferralCode, now, ct);
         await _db.SaveChangesAsync(ct);
         return user;
     }
+
+    /// <summary>Фиксирует согласие: условия программы, персональные данные (152-ФЗ) и возраст 18+ принимаются вместе.</summary>
+    public async Task<OpResult<User>> AcceptConsentAsync(User user, bool terms, bool personalData, bool adult, DateTime now, CancellationToken ct = default)
+    {
+        if (!terms || !personalData) return OpResult<User>.Fail("Для участия нужно принять условия программы и согласие на обработку персональных данных.");
+        if (!adult) return OpResult<User>.Fail("Программа лояльности DIESEL ROOM доступна только гостям старше 18 лет.");
+
+        user.ConsentAcceptedAt = now;
+        user.ConsentVersion = LegalInfo.CurrentVersion;
+        user.AdultConfirmedAt = now;
+        await _db.SaveChangesAsync(ct);
+        return OpResult<User>.Success(user);
+    }
+
+    /// <summary>Форма профиля: имя и телефон, за первое заполнение — разовый бонус.</summary>
+    public async Task<OpResult<User>> SaveProfileAsync(User user, string? firstName, string? lastName, string? phone, LoyaltyRates rates, DateTime now, CancellationToken ct = default)
+    {
+        var first = Clean(firstName, 100);
+        if (first == null || first.Length < 2) return OpResult<User>.Fail("Укажите имя (от 2 символов).");
+        var normalizedPhone = Codes.NormalizePhone(phone);
+        if (normalizedPhone == null) return OpResult<User>.Fail("Укажите телефон в формате +7 XXX XXX-XX-XX.");
+        // Один номер — один гость: иначе бонус за профиль можно получать на разные учётные записи
+        if (await _db.Users.AnyAsync(u => u.Phone == normalizedPhone && u.Id != user.Id, ct))
+        {
+            return OpResult<User>.Fail("Этот номер уже указан у другого гостя.", 409);
+        }
+
+        user.FirstName = first;
+        user.LastName = Clean(lastName, 100) ?? string.Empty;
+        user.Phone = normalizedPhone;
+        user.ProfileCompletedAt ??= now;
+        await _db.SaveChangesAsync(ct);
+
+        await OneTimeRewards.TryAwardAsync(_db, user, OneTimeRewards.Profile, 0, rates.ProfileBonusCoins, rates.ProfileBonusRating,
+            PointsTransactionTypes.ProfileBonus, "Заполнен профиль гостя", now, ct);
+        return OpResult<User>.Success(user);
+    }
+
+    /// <summary>Промокод друга, введённый вручную: те же условия, что и у ссылки, но с понятной причиной отказа.</summary>
+    public async Task<OpResult<User>> ApplyReferralAsync(User user, string? code, DateTime now, CancellationToken ct = default)
+    {
+        if (Clean(code, 16) == null) return OpResult<User>.Fail("Введите код друга.");
+        if (user.ReferredByUserId != null) return OpResult<User>.Fail("Код друга уже привязан.", 409);
+        if (user.VisitsCount > 0) return OpResult<User>.Fail("Код друга можно ввести только до первого визита.", 409);
+        if (now - user.CreatedAt > ReferralAttachWindow) return OpResult<User>.Fail("Код друга можно ввести только в первые сутки после регистрации.", 409);
+
+        if (!await TryAttachReferralAsync(user, code, now, ct)) return OpResult<User>.Fail("Код не подошёл: проверьте его. Свой код вводить нельзя.");
+        await _db.SaveChangesAsync(ct);
+        return OpResult<User>.Success(user);
+    }
+
+    public static bool CanEnterReferralCode(User user, DateTime now) =>
+        user.ReferredByUserId == null && user.VisitsCount == 0 && now - user.CreatedAt <= ReferralAttachWindow;
 
     /// <summary>
     /// Привязка к пригласившему: только новый гость (первые сутки, ещё без визитов), не сам себя и без «кольца»

@@ -1,9 +1,10 @@
 import { beforeEach, describe, expect, it } from 'bun:test';
-import { formatCoins, formatLocalDate, formatPermDateTime, formatPhone, permDateString, permTimeString, plural, timeLeft } from './format';
+import { formatCoins, formatFullDate, formatLocalDate, formatPermDateTime, formatPhone, formatPoints, formatPrivilegeCode, permDateString, permTimeString, plural, raceCountdown, timeLeft } from './format';
+import { fitSize } from './imageUpload';
 import { buildReferralLink, getPendingReferralCode, referralRuleText, sanitizeReferralCode, REFERRAL_STORAGE_KEY } from './referral';
 import { safeStorage } from './safeStorage';
 import { apiErrorMessage, classifyApiError } from '../api/client';
-import { staffFromProfile, syncPayload } from '../store/useApp';
+import { MESSAGES_ASK_INTERVAL, shouldAskMessages, staffFromProfile, syncPayload } from '../store/useApp';
 import type { Profile } from '../types';
 
 describe('Время Перми и форматирование', () => {
@@ -25,6 +26,37 @@ describe('Время Перми и форматирование', () => {
     expect(timeLeft('2026-11-04T13:12:00.000Z', now)).toBe('3 ч 12 мин');
     expect(timeLeft('2026-11-04T10:00:30.000Z', now)).toBe('1 мин');
     expect(timeLeft('2026-11-04T09:00:00.000Z', now)).toBe('истёк');
+  });
+
+  it('живой отсчёт до конца гонки', () => {
+    const now = Date.UTC(2026, 10, 4, 13, 0, 0);
+    expect(raceCountdown('2026-11-08T18:59:00.000Z', now)).toBe('4 д 05:59:00');
+    expect(raceCountdown('2026-11-04T13:00:09.000Z', now)).toBe('00:00:09');
+    expect(raceCountdown('2026-11-04T13:00:00.000Z', now)).toBeNull();
+    expect(raceCountdown(null, now)).toBeNull();
+  });
+
+  it('код привилегии, очки и полная дата', () => {
+    expect(formatPrivilegeCode('482913')).toBe('482 913');
+    expect(formatPoints(1)).toBe('1 очко');
+    expect(formatPoints(3)).toBe('3 очка');
+    expect(formatPoints(12)).toBe('12 очков');
+    expect(formatFullDate('2026-12-31')).toBe('31.12.2026');
+  });
+
+  it('размер фото при загрузке: уменьшаем, но не растягиваем', () => {
+    expect(fitSize(4000, 2000)).toEqual({ width: 1000, height: 500 });
+    expect(fitSize(1000, 3000)).toEqual({ width: 333, height: 1000 });
+    expect(fitSize(640, 480)).toEqual({ width: 640, height: 480 });
+  });
+
+  it('разрешение на сообщения спрашиваем не чаще раза в неделю и после согласия', () => {
+    const now = 10 * MESSAGES_ASK_INTERVAL;
+    const open = { consentRequired: false, tasks: [{ key: 'message_allow', done: false }] } as Parameters<typeof shouldAskMessages>[0];
+    expect(shouldAskMessages(open, 0, now)).toBe(true);
+    expect(shouldAskMessages(open, now - 1000, now)).toBe(false);
+    expect(shouldAskMessages({ ...open, consentRequired: true }, 0, now)).toBe(false);
+    expect(shouldAskMessages({ ...open, tasks: [{ ...open.tasks[0], done: true }] }, 0, now)).toBe(false);
   });
 
   it('склонения и баллы', () => {

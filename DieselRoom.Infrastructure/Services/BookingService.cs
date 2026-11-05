@@ -24,11 +24,13 @@ public class BookingService
 
     private readonly AppDbContext _db;
     private readonly IGuestNotifier _notifier;
+    private readonly StaffAlertService _alerts;
 
-    public BookingService(AppDbContext db, IGuestNotifier notifier)
+    public BookingService(AppDbContext db, IGuestNotifier notifier, StaffAlertService alerts)
     {
         _db = db;
         _notifier = notifier;
+        _alerts = alerts;
     }
 
     public static string FormatLabel(BookingFormat format) => format switch
@@ -71,9 +73,14 @@ public class BookingService
             return OpResult<Booking>.Fail($"У вас уже {active} активные брони. Отмените лишнюю или позвоните: {VenuePhone}.", 409);
         }
 
-        if (request.AfishaEventId.HasValue && !await _db.AfishaEvents.AnyAsync(e => e.Id == request.AfishaEventId && e.IsActive, ct))
+        string? eventTitle = null;
+        if (request.AfishaEventId.HasValue)
         {
-            return OpResult<Booking>.Fail("Мероприятие не найдено.", 404);
+            eventTitle = await _db.AfishaEvents.AsNoTracking()
+                .Where(e => e.Id == request.AfishaEventId && e.IsActive)
+                .Select(e => e.Title)
+                .FirstOrDefaultAsync(ct);
+            if (eventTitle == null) return OpResult<Booking>.Fail("Мероприятие не найдено.", 404);
         }
 
         var booking = new Booking
@@ -87,12 +94,15 @@ public class BookingService
             Phone = Codes.NormalizePhone(request.Phone)!,
             Wishes = string.IsNullOrWhiteSpace(request.Wishes) ? null : request.Wishes.Trim(),
             AfishaEventId = request.AfishaEventId,
+            EventTitle = eventTitle,
             Status = BookingStatus.Pending,
             CreatedAt = now,
             UpdatedAt = now,
         };
         _db.Bookings.Add(booking);
         await _db.SaveChangesAsync(ct);
+
+        await _alerts.NotifyAsync(BuildNewBookingAlert(booking), $"новая бронь #{booking.Id}", ct);
         return OpResult<Booking>.Success(booking);
     }
 
@@ -108,6 +118,8 @@ public class BookingService
         booking.Status = BookingStatus.Cancelled;
         booking.UpdatedAt = now;
         await _db.SaveChangesAsync(ct);
+
+        await _alerts.NotifyAsync(BuildCancelledAlert(booking), $"отмена брони #{booking.Id}", ct);
         return OpResult<Booking>.Success(booking);
     }
 
@@ -184,9 +196,21 @@ public class BookingService
         _ => status.ToString(),
     };
 
-    public static string BuildConfirmedMessage(Booking b) =>
-        $"Ваша бронь в DIESEL ROOM подтверждена.\n" +
+    private static string Summary(Booking b) =>
         $"{b.Date:dd.MM.yyyy} в {b.Time:HH\\:mm} · гостей: {b.GuestsCount} · {FormatLabel(b.Format)}\n" +
+        (b.EventTitle != null ? $"Событие: {b.EventTitle}\n" : string.Empty);
+
+    public static string BuildNewBookingAlert(Booking b) =>
+        $"Новая заявка на бронь #{b.Id}\n" + Summary(b) +
+        $"Гость: {b.Name}, +{b.Phone}\n" +
+        (b.Wishes != null ? $"Пожелания: {b.Wishes}\n" : string.Empty) +
+        "Подтвердите в приложении: Управление → Брони.";
+
+    public static string BuildCancelledAlert(Booking b) =>
+        $"Гость отменил бронь #{b.Id}\n" + Summary(b) + $"Гость: {b.Name}, +{b.Phone}";
+
+    public static string BuildConfirmedMessage(Booking b) =>
+        $"Ваша бронь в DIESEL ROOM подтверждена.\n" + Summary(b) +
         (b.StaffComment != null ? $"Комментарий: {b.StaffComment}\n" : string.Empty) +
         $"Ждём вас: {VenueAddress}. Телефон: {VenuePhone}.";
 

@@ -53,6 +53,7 @@ public class VisitService
 
         var guest = await _db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == guestUserId, ct);
         if (guest == null) return OpResult<VisitResult>.Fail("Гость не найден.", 404);
+        if (staff.IsSelf(guest.VkId)) return OpResult<VisitResult>.Fail(StaffIdentity.SelfServiceError, 403);
 
         var visit = new Visit
         {

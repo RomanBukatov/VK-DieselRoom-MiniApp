@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ChevronRight, ExternalLink, MapPin, Phone, Play } from 'lucide-react';
+import { CalendarDays, ChevronRight, ExternalLink, MapPin, Navigation, Phone, Play } from 'lucide-react';
 import { Button, Card, Empty, ErrorLine, SectionTitle, Spinner } from '../components/ui';
 import { AntWatermark } from '../components/Brand';
 import { KeyIcon } from '../components/Icon';
@@ -10,6 +10,7 @@ import { useNow } from '../store/useNow';
 import { isSafeUrl, visibleMenu } from '../domain/afisha';
 import { openExternalUrl, triggerHaptic } from '../utils/vkBridge';
 import { BRAND } from '../config/brand';
+import { formatLocalDate, formatLocalTime } from '../utils/format';
 import type { AfishaEvent } from '../types';
 
 export const AfishaPanel: React.FC = () => {
@@ -88,6 +89,12 @@ export const AfishaPanel: React.FC = () => {
                 {ev.imageUrl && <img src={ev.imageUrl} alt="" className="w-full h-36 object-cover rounded-xl mb-3" loading="lazy" />}
                 {ev.tagline && <div className="text-[11px] font-bold text-dr-red-light uppercase tracking-wide">{ev.tagline}</div>}
                 <div className="dr-title text-[15px] mt-1 leading-snug">{ev.title}</div>
+                {ev.eventDate && (
+                  <div className="text-xs font-bold mt-1 flex items-center gap-1.5">
+                    <CalendarDays className="w-3.5 h-3.5 text-dr-red-light shrink-0" />
+                    {formatLocalDate(ev.eventDate)}{ev.eventTime ? ` · ${formatLocalTime(ev.eventTime)}` : ''}
+                  </div>
+                )}
                 {ev.description && <p className="text-xs text-dr-muted mt-1.5 leading-relaxed">{ev.description}</p>}
                 <div className="flex flex-wrap gap-2 mt-3">
                   {ev.allowBooking && (
@@ -97,7 +104,7 @@ export const AfishaPanel: React.FC = () => {
                   )}
                   {isSafeUrl(ev.productUrl) && (
                     <Button size="sm" variant="dark" onClick={() => openExternalUrl(ev.productUrl!)}>
-                      Подробнее <ExternalLink className="w-3.5 h-3.5" />
+                      {ev.productLabel || 'Подробнее'} <ExternalLink className="w-3.5 h-3.5" />
                     </Button>
                   )}
                 </div>
@@ -112,11 +119,15 @@ export const AfishaPanel: React.FC = () => {
             <a href={BRAND.phoneHref} className="flex items-center gap-2 text-sm mt-2">
               <Phone className="w-4 h-4 text-dr-red-light shrink-0" /> {BRAND.phone}
             </a>
+            <Button size="sm" variant="dark" className="w-full mt-3" onClick={() => openExternalUrl(BRAND.routeUrl)}>
+              <Navigation className="w-3.5 h-3.5" /> Построить маршрут
+            </Button>
           </Card>
         </>
       )}
 
-      <BookingSheet open={bookingOpen} event={bookingFor} onClose={() => setBookingOpen(false)} />
+      {/* Монтируем при открытии: форма каждый раз берёт свежий профиль и дату выбранного события */}
+      {bookingOpen && <BookingSheet event={bookingFor} onClose={() => setBookingOpen(false)} />}
     </div>
   );
 };

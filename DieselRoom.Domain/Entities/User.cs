@@ -1,3 +1,5 @@
+using DieselRoom.Domain.Enums;
+
 namespace DieselRoom.Domain.Entities;
 
 public class User
@@ -39,6 +41,20 @@ public class User
     public int? LastKnownWeeklyRank { get; set; }
     /// <summary>Когда последний раз отправлено уведомление «Вас обошли» (не чаще 1 раза в 6 часов).</summary>
     public DateTime? LastRankNotifiedAt { get; set; }
+
+    /// <summary>Лучшая цель, о приближении к которой гость уже предупреждён на этой неделе (обнуляется при сбросе).</summary>
+    public PrivilegeTier? LastApproachTier { get; set; }
+    /// <summary>Когда отправлено последнее уведомление «До приза осталось X очков».</summary>
+    public DateTime? LastApproachAt { get; set; }
+
+    /// <summary>Когда гость принял условия программы и согласие на обработку персональных данных (152-ФЗ).</summary>
+    public DateTime? ConsentAcceptedAt { get; set; }
+    /// <summary>Какую редакцию условий принял гость.</summary>
+    public string? ConsentVersion { get; set; }
+    /// <summary>Когда гость подтвердил, что ему исполнилось 18 лет.</summary>
+    public DateTime? AdultConfirmedAt { get; set; }
+    /// <summary>Гость сам заполнил профиль: имя из ВК больше не перезаписывает то, что он указал.</summary>
+    public DateTime? ProfileCompletedAt { get; set; }
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime LastSeenAt { get; set; } = DateTime.UtcNow;

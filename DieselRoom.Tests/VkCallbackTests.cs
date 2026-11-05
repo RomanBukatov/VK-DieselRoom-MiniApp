@@ -121,4 +121,79 @@ public class VkCallbackTests
         using var db = t.NewContext();
         Assert.Equal(0, await db.PointsTransactions.CountAsync());
     }
+
+    [Fact]
+    public async Task GroupJoin_AndMessageAllow_AwardedStrictlyOnce()
+    {
+        using var t = new TestDb();
+        var guest = t.AddUser("300700");
+        var clock = new FakeClock(TestTimes.WednesdayEvening);
+
+        await Controller(t, clock).HandleCallback(Event("group_join", new { user_id = 300700, join_type = "join" }));
+        await Controller(t, clock).HandleCallback(Event("group_join", new { user_id = 300700, join_type = "join" })); // повторная доставка
+        Assert.Equal((20, 5), (t.GetUser(guest.Id).DieselCoinsBalance, t.GetUser(guest.Id).WeeklyRating));
+
+        // Отписался и подписался снова — второго бонуса нет
+        clock.Advance(TimeSpan.FromDays(3));
+        await Controller(t, clock).HandleCallback(Event("group_join", new { user_id = 300700, join_type = "join" }));
+        Assert.Equal(20, t.GetUser(guest.Id).DieselCoinsBalance);
+
+        await Controller(t, clock).HandleCallback(Event("message_allow", new { user_id = 300700, key = "x" }));
+        await Controller(t, clock).HandleCallback(Event("message_allow", new { user_id = 300700, key = "x" }));
+        Assert.Equal((40, 10), (t.GetUser(guest.Id).DieselCoinsBalance, t.GetUser(guest.Id).WeeklyRating));
+    }
+
+    [Fact]
+    public async Task PollVote_OncePerPoll_ForeignPollIgnored_NotCappedBySocialLimit()
+    {
+        using var t = new TestDb();
+        var guest = t.AddUser("300800");
+        var clock = new FakeClock(TestTimes.WednesdayEvening);
+
+        object Vote(int poll, long owner = -GroupId) => new { owner_id = owner, poll_id = poll, option_id = 1, user_id = 300800 };
+
+        await Controller(t, clock).HandleCallback(Event("poll_vote_new", Vote(7)));
+        await Controller(t, clock).HandleCallback(Event("poll_vote_new", Vote(7)));
+        Assert.Equal((5, 2), (t.GetUser(guest.Id).DieselCoinsBalance, t.GetUser(guest.Id).WeeklyRating));
+
+        await Controller(t, clock).HandleCallback(Event("poll_vote_new", Vote(8)));
+        Assert.Equal(10, t.GetUser(guest.Id).DieselCoinsBalance);
+
+        await Controller(t, clock).HandleCallback(Event("poll_vote_new", Vote(9, owner: -555)));
+        Assert.Equal(10, t.GetUser(guest.Id).DieselCoinsBalance);
+    }
+
+    [Fact]
+    public async Task GuestWithoutConsent_GetsNothing()
+    {
+        using var t = new TestDb();
+        var guest = t.AddUser("300900", consent: false);
+        var clock = new FakeClock(TestTimes.WednesdayEvening);
+
+        await Controller(t, clock).HandleCallback(Event("like_add", new { object_type = "post", object_id = 5, liker_id = 300900 }));
+        await Controller(t, clock).HandleCallback(Event("group_join", new { user_id = 300900 }));
+        Assert.Equal(0, t.GetUser(guest.Id).DieselCoinsBalance);
+    }
+
+    [Fact]
+    public async Task DailySocialCap_ResetsAtPermMidnight_NotUtc()
+    {
+        using var t = new TestDb();
+        var guest = t.AddUser("301000");
+        using (var db = t.NewContext())
+        {
+            await new SettingsService(db).SaveRatesAsync(LoyaltyRates.Default with { DailySocialCoinsCap = 1 });
+        }
+
+        // Среда 23:30 по Перми (18:30 UTC): лимит выбран
+        var clock = new FakeClock(PermTime.ToUtc(new DateTime(2026, 11, 4, 23, 30, 0)));
+        await Controller(t, clock).HandleCallback(Event("like_add", new { object_type = "post", object_id = 1, liker_id = 301000 }));
+        await Controller(t, clock).HandleCallback(Event("like_add", new { object_type = "post", object_id = 2, liker_id = 301000 }));
+        Assert.Equal(1, t.GetUser(guest.Id).DieselCoinsBalance);
+
+        // Четверг 00:30 по Перми (19:30 UTC той же даты по UTC): сутки заведения новые
+        clock.Advance(TimeSpan.FromHours(1));
+        await Controller(t, clock).HandleCallback(Event("like_add", new { object_type = "post", object_id = 3, liker_id = 301000 }));
+        Assert.Equal(2, t.GetUser(guest.Id).DieselCoinsBalance);
+    }
 }

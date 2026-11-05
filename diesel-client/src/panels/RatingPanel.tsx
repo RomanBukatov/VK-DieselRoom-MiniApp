@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import clsx from 'clsx';
 import { Card, Empty, ErrorLine, Segmented, Spinner } from '../components/ui';
 import { AntMascot } from '../components/Brand';
 import { KeyIcon } from '../components/Icon';
 import { RankBadge } from '../components/Rank';
+import { NextPlaceBanner, RaceCountdown } from '../components/RaceStatus';
 import { toneClass } from '../config/tones';
 import { Flame } from 'lucide-react';
 import { guestApi } from '../api/endpoints';
@@ -58,9 +59,15 @@ export const RatingPanel: React.FC = () => {
   const total = useSwr(kind === 'total' ? 'diesel_cached_leaderboard_total' : null, guestApi.total, 60 * 60 * 1000);
   const board = kind === 'weekly' ? weekly : total;
   const profile = useApp((s) => s.profile);
+  const refreshProfile = useApp((s) => s.refreshProfile);
   const data = board.data;
   const meInList = data?.rows.some((r) => r.isMe);
   const streak = profile ? streakText(profile.privilege) : null;
+
+  // Плашка «До следующего места» считается по профилю: обновляем его при открытии вкладки
+  useEffect(() => {
+    void refreshProfile();
+  }, [refreshProfile]);
 
   return (
     <div className="px-4 pb-28">
@@ -78,6 +85,10 @@ export const RatingPanel: React.FC = () => {
           <div className="text-xs text-dr-muted">
             Призы — по месту в недельной гонке и переходят к тому, кто обгонит. Сброс: воскресенье 23:59 по Перми
             {data?.nextResetAt ? ` (${formatPermDateTime(data.nextResetAt)})` : ''}.
+          </div>
+          <div className="mt-3 space-y-2">
+            <RaceCountdown until={data?.nextResetAt ?? profile?.nextWeeklyResetAt} />
+            {profile && <NextPlaceBanner race={profile.race} rank={profile.weeklyRank} />}
           </div>
           {profile?.privilege.label && (
             <div className="mt-2 text-sm font-bold">
@@ -100,6 +111,7 @@ export const RatingPanel: React.FC = () => {
                   <span className="w-20 shrink-0 text-dr-muted">{tierRangeLabel(t)}</span>
                   <span>
                     {t.title} <span className="text-dr-muted">({t.conditions})</span>
+                    {t.ageRestricted && <span className="ml-1 text-dr-red-light font-bold">18+</span>}
                   </span>
                 </li>
               ))}

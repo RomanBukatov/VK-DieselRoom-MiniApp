@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Plus, Trash2 } from 'lucide-react';
+import { Plus, Trash2, Upload } from 'lucide-react';
 import { Button, Card, Empty, ErrorLine, Field, Pill, Segmented, Sheet, Spinner, inputClass } from '../../components/ui';
 import { adminApi, type AfishaEventInput, type BannerInput, type ShopItemInput, type StaffMemberInput } from '../../api/endpoints';
 import { apiErrorMessage } from '../../api/client';
@@ -8,10 +8,12 @@ import { BOOKING_FORMATS } from '../../domain/booking';
 import { KeyIcon } from '../../components/Icon';
 import { MENU_ICON_KEYS, PRIZE_ICON_KEYS } from '../../config/icons';
 import { PrizeVisual } from '../../components/Brand';
-import { formatPermDateTime } from '../../utils/format';
-import type { AfishaEvent, Banner, LoyaltyRates, MenuLink, ShopItem, StaffAuditEntry, StaffMember } from '../../types';
+import { formatFullDate, formatPermDateTime } from '../../utils/format';
+import { imageFileToDataUrl } from '../../utils/imageUpload';
+import { GuestsAdmin } from './GuestsAdmin';
+import type { AfishaEvent, Banner, LevelRule, LoyaltyRates, MenuLink, ShopItem, StaffAuditEntry, StaffMember } from '../../types';
 
-type Section = 'afisha' | 'shop' | 'rates' | 'staff' | 'audit';
+type Section = 'afisha' | 'shop' | 'rates' | 'guests' | 'staff' | 'audit';
 
 /** Загрузка списка + перезагрузка после сохранения. */
 function useAdminList<T>(load: () => Promise<T>) {
@@ -72,7 +74,8 @@ export const AdminPanel: React.FC = () => {
         {([
           ['afisha', 'Афиша'],
           ['shop', 'Подарки'],
-          ['rates', 'Ставки'],
+          ['rates', 'Ставки и уровни'],
+          ['guests', 'Гости'],
           ['staff', 'Сотрудники'],
           ['audit', 'Журнал'],
         ] as [Section, string][]).map(([key, label]) => (
@@ -89,6 +92,7 @@ export const AdminPanel: React.FC = () => {
       {section === 'afisha' && <AfishaAdmin />}
       {section === 'shop' && <ShopAdmin />}
       {section === 'rates' && <RatesAdmin />}
+      {section === 'guests' && <GuestsAdmin />}
       {section === 'staff' && <StaffAdmin />}
       {section === 'audit' && <AuditLog />}
     </div>
@@ -99,7 +103,7 @@ export const AdminPanel: React.FC = () => {
 
 const emptyBanner: BannerInput = { title: '', subtitle: '', linkUrl: '', imageUrl: '', isActive: true, sortOrder: 0 };
 const emptyEvent: AfishaEventInput = {
-  title: '', tagline: '', description: '', productUrl: '', imageUrl: '', allowBooking: true, defaultFormat: 'Hall', isActive: true, sortOrder: 0,
+  title: '', tagline: '', description: '', productUrl: '', productLabel: '', imageUrl: '', eventDate: null, eventTime: null, allowBooking: true, defaultFormat: 'Hall', isActive: true, sortOrder: 0,
 };
 
 const AfishaAdmin: React.FC = () => {
@@ -165,7 +169,7 @@ const AfishaAdmin: React.FC = () => {
             <div className="flex items-center justify-between gap-2">
               <div className="min-w-0">
                 <div className="text-sm font-bold truncate">{e.title}</div>
-                <div className="text-[11px] text-dr-muted truncate">{e.tagline}</div>
+                <div className="text-[11px] text-dr-muted truncate">{e.eventDate ? `${formatFullDate(e.eventDate)} · ` : ''}{e.tagline}</div>
               </div>
               <div className="flex items-center gap-1.5 shrink-0">
                 {!e.isActive && <Pill>скрыто</Pill>}
@@ -232,7 +236,12 @@ const AfishaAdmin: React.FC = () => {
             <Field label="Название"><input className={inputClass} value={event.value.title} onChange={(e) => setEvent({ ...event, value: { ...event.value, title: e.target.value } })} /></Field>
             <Field label="Подпись (цена, дни)"><input className={inputClass} value={event.value.tagline ?? ''} onChange={(e) => setEvent({ ...event, value: { ...event.value, tagline: e.target.value } })} /></Field>
             <Field label="Описание"><textarea className={`${inputClass} min-h-[72px]`} value={event.value.description ?? ''} onChange={(e) => setEvent({ ...event, value: { ...event.value, description: e.target.value } })} /></Field>
+            <div className="grid grid-cols-2 gap-2">
+              <Field label="Дата события" hint="Подставится в форму брони."><input type="date" className={inputClass} value={event.value.eventDate ?? ''} onChange={(e) => setEvent({ ...event, value: { ...event.value, eventDate: e.target.value || null, eventTime: e.target.value ? event.value.eventTime : null } })} /></Field>
+              <Field label="Время начала"><input type="time" className={inputClass} disabled={!event.value.eventDate} value={event.value.eventTime?.slice(0, 5) ?? ''} onChange={(e) => setEvent({ ...event, value: { ...event.value, eventTime: e.target.value || null } })} /></Field>
+            </div>
             <Field label="Ссылка на товар / пост (https://)"><input className={inputClass} value={event.value.productUrl ?? ''} onChange={(e) => setEvent({ ...event, value: { ...event.value, productUrl: e.target.value } })} /></Field>
+            <Field label="Подпись кнопки-ссылки" hint="Например, «Меню бизнес-ланча». Пусто — «Подробнее»."><input className={inputClass} maxLength={60} value={event.value.productLabel ?? ''} onChange={(e) => setEvent({ ...event, value: { ...event.value, productLabel: e.target.value } })} /></Field>
             <Field label="Картинка (https://)"><input className={inputClass} value={event.value.imageUrl ?? ''} onChange={(e) => setEvent({ ...event, value: { ...event.value, imageUrl: e.target.value } })} /></Field>
             <Field label="Формат брони по умолчанию">
               <select className={inputClass} value={event.value.defaultFormat} onChange={(e) => setEvent({ ...event, value: { ...event.value, defaultFormat: e.target.value as AfishaEventInput['defaultFormat'] } })}>
@@ -258,12 +267,27 @@ const AfishaAdmin: React.FC = () => {
 
 // ---------------- Каталог подарков ----------------
 
-const emptyItem: ShopItemInput = { title: '', description: '', icon: 'gift', imageUrl: '', priceCoins: 100, stockCount: 10, isActive: true, sortOrder: 0 };
+const emptyItem: ShopItemInput = { title: '', description: '', icon: 'gift', imageUrl: '', priceCoins: 100, stockCount: 10, isActive: true, sortOrder: 0, ageRestricted: false };
 
 const ShopAdmin: React.FC = () => {
   const items = useAdminList(adminApi.shopItems);
   const saver = useSaver();
   const [edit, setEdit] = useState<{ id?: number; value: ShopItemInput } | null>(null);
+  const [uploading, setUploading] = useState(false);
+
+  const upload = async (file: File | undefined) => {
+    if (!file || !edit) return;
+    setUploading(true);
+    saver.setError(null);
+    try {
+      const { url } = await adminApi.uploadMedia(await imageFileToDataUrl(file));
+      setEdit((current) => (current ? { ...current, value: { ...current.value, imageUrl: url } } : current));
+    } catch (e) {
+      saver.setError(apiErrorMessage(e, 'Не удалось загрузить фото.'));
+    } finally {
+      setUploading(false);
+    }
+  };
 
   return (
     <div className="space-y-2">
@@ -279,6 +303,7 @@ const ShopAdmin: React.FC = () => {
               <div className="text-[11px] text-dr-muted">{i.priceCoins} баллов · остаток {i.stockCount}</div>
             </div>
             <div className="flex items-center gap-1.5 shrink-0">
+              {i.ageRestricted && <Pill tone="red">18+</Pill>}
               {!i.isActive && <Pill>скрыт</Pill>}
               {i.stockCount === 0 && <Pill tone="red">нет</Pill>}
               <Button size="sm" variant="dark" onClick={() => setEdit({ id: i.id, value: { ...i } })}>Изм.</Button>
@@ -300,13 +325,18 @@ const ShopAdmin: React.FC = () => {
               <Field label="Название"><input className={inputClass} value={edit.value.title} onChange={(e) => setEdit({ ...edit, value: { ...edit.value, title: e.target.value } })} /></Field>
             </div>
             <Field label="Описание"><input className={inputClass} value={edit.value.description ?? ''} onChange={(e) => setEdit({ ...edit, value: { ...edit.value, description: e.target.value } })} /></Field>
-            <Field label="Фото" hint="/prizes/имя.webp из приложения или ссылка https://. Пусто — фирменная заглушка с иконкой.">
+            <Field label="Фото" hint="Загрузите файл или укажите ссылку https://. Пусто — фирменная заглушка с иконкой.">
               <input className={inputClass} value={edit.value.imageUrl ?? ''} onChange={(e) => setEdit({ ...edit, value: { ...edit.value, imageUrl: e.target.value } })} />
             </Field>
+            <label className={`flex items-center justify-center gap-1.5 rounded-xl border border-dr-border bg-dr-surface px-3 py-2.5 text-xs font-bold cursor-pointer ${uploading ? 'opacity-50 pointer-events-none' : ''}`}>
+              <Upload className="w-4 h-4" /> {uploading ? 'Загружаем…' : 'Загрузить фото с устройства'}
+              <input type="file" accept="image/*" className="hidden" onChange={(e) => { void upload(e.target.files?.[0]); e.target.value = ''; }} />
+            </label>
             <div className="grid grid-cols-2 gap-2">
               <Field label="Цена, баллов"><input inputMode="numeric" className={inputClass} value={edit.value.priceCoins} onChange={(e) => setEdit({ ...edit, value: { ...edit.value, priceCoins: Number(e.target.value.replace(/\D/g, '')) || 0 } })} /></Field>
               <Field label="Остаток"><input inputMode="numeric" className={inputClass} value={edit.value.stockCount} onChange={(e) => setEdit({ ...edit, value: { ...edit.value, stockCount: Number(e.target.value.replace(/\D/g, '')) || 0 } })} /></Field>
             </div>
+            <Check label="Только 18+ (алкоголь, кальян): официант проверит паспорт" checked={edit.value.ageRestricted} onChange={(v) => setEdit({ ...edit, value: { ...edit.value, ageRestricted: v } })} />
             <Check label="Показывать в магазине" checked={edit.value.isActive} onChange={(v) => setEdit({ ...edit, value: { ...edit.value, isActive: v } })} />
             <ErrorLine text={saver.error} />
             <Button className="w-full" disabled={saver.busy} onClick={async () => (await saver.run(() => adminApi.saveShopItem(edit.value, edit.id))) && (setEdit(null), void items.reload())}>Сохранить</Button>
@@ -330,9 +360,18 @@ const RATE_FIELDS: { key: keyof LoyaltyRates; label: string }[] = [
   { key: 'visitRating', label: 'Визит — рейтинг' },
   { key: 'referralCoins', label: 'Друг — баллы' },
   { key: 'referralRating', label: 'Друг — рейтинг' },
+  { key: 'profileBonusCoins', label: 'Профиль — баллы' },
+  { key: 'profileBonusRating', label: 'Профиль — рейтинг' },
+  { key: 'groupJoinCoins', label: 'Подписка — баллы' },
+  { key: 'groupJoinRating', label: 'Подписка — рейтинг' },
+  { key: 'messageAllowCoins', label: 'Сообщения — баллы' },
+  { key: 'messageAllowRating', label: 'Сообщения — рейтинг' },
+  { key: 'pollCoins', label: 'Опрос — баллы' },
+  { key: 'pollRating', label: 'Опрос — рейтинг' },
   { key: 'maxPaidCommentsPer24h', label: 'Комментов в сутки' },
   { key: 'dailySocialCoinsCap', label: 'Потолок соцбаллов/сутки' },
   { key: 'minRewardPostId', label: 'Мин. ID поста (архив)' },
+  { key: 'approachNotifyPoints', label: 'Сообщить, если до приза очков' },
 ];
 
 const RatesAdmin: React.FC = () => {
@@ -343,6 +382,7 @@ const RatesAdmin: React.FC = () => {
 
   if (!value) return <ErrorLine text={rates.error} onRetry={rates.reload} />;
   return (
+    <div className="space-y-3">
     <Card>
       <div className="grid grid-cols-2 gap-2">
         {RATE_FIELDS.map((f) => (
@@ -356,6 +396,41 @@ const RatesAdmin: React.FC = () => {
         Сохранить ставки
       </Button>
     </Card>
+    <LevelsAdmin />
+    </div>
+  );
+};
+
+/** Уровни гостя: считаются по очкам «за всё время», названия и пороги настраивает администратор. */
+const LevelsAdmin: React.FC = () => {
+  const levels = useAdminList(adminApi.levels);
+  const saver = useSaver();
+  const [draft, setDraft] = useState<LevelRule[] | null>(null);
+  const value = draft ?? levels.data;
+
+  if (!value) return <ErrorLine text={levels.error} onRetry={levels.reload} />;
+  const patch = (index: number, change: Partial<LevelRule>) => setDraft(value.map((l, i) => (i === index ? { ...l, ...change } : l)));
+
+  return (
+    <Card>
+      <div className="text-xs font-bold uppercase text-dr-muted mb-2">Уровни гостя (по очкам за всё время)</div>
+      <div className="space-y-2">
+        {value.map((level, i) => (
+          <div key={i} className="grid grid-cols-[1fr_96px] gap-2">
+            <Field label={`Уровень ${i + 1}`}>
+              <input className={inputClass} value={level.title} maxLength={40} onChange={(e) => patch(i, { title: e.target.value })} />
+            </Field>
+            <Field label="От очков">
+              <input inputMode="numeric" className={inputClass} disabled={i === 0} value={level.minRating} onChange={(e) => patch(i, { minRating: Number(e.target.value.replace(/\D/g, '')) || 0 })} />
+            </Field>
+          </div>
+        ))}
+      </div>
+      <div className="mt-2"><ErrorLine text={saver.error} /></div>
+      <Button className="w-full mt-3" disabled={saver.busy || !draft} onClick={async () => (await saver.run(() => adminApi.saveLevels(value), 'Уровни сохранены.')) && (setDraft(null), void levels.reload())}>
+        Сохранить уровни
+      </Button>
+    </Card>
   );
 };
 
@@ -367,10 +442,11 @@ const StaffAdmin: React.FC = () => {
   const list = useAdminList(adminApi.staff);
   const saver = useSaver();
   const [edit, setEdit] = useState<{ id?: number; value: StaffMemberInput; hasPin?: boolean } | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   return (
     <div className="space-y-2">
-      <Button size="sm" variant="dark" onClick={() => setEdit({ value: { ...emptyStaff } })}>
+      <Button size="sm" variant="dark" onClick={() => { setConfirmDelete(false); setEdit({ value: { ...emptyStaff } }); }}>
         <Plus className="w-3.5 h-3.5" /> Сотрудник
       </Button>
       <ErrorLine text={list.error} onRetry={list.reload} />
@@ -388,7 +464,7 @@ const StaffAdmin: React.FC = () => {
             </div>
             <div className="flex items-center gap-1.5 shrink-0">
               {!s.isActive && <Pill tone="red">отключён</Pill>}
-              <Button size="sm" variant="dark" onClick={() => setEdit({ id: s.id, hasPin: s.hasPin, value: { name: s.name, role: s.role, vkId: s.vkId ?? '', pin: '', isActive: s.isActive } })}>Изм.</Button>
+              <Button size="sm" variant="dark" onClick={() => { setConfirmDelete(false); setEdit({ id: s.id, hasPin: s.hasPin, value: { name: s.name, role: s.role, vkId: s.vkId ?? '', pin: '', isActive: s.isActive } }); }}>Изм.</Button>
             </div>
           </div>
         </Card>
@@ -406,7 +482,7 @@ const StaffAdmin: React.FC = () => {
                 { value: 'Admin', label: 'Администратор' },
               ]}
             />
-            <Field label="VK ID (цифры)" hint="Вход со своего телефона без ПИН-кода.">
+            <Field label="VK ID (цифры)" hint="Вход со своего телефона без ПИН-кода. Укажите и для входа по ПИН-коду: так система не даст сотруднику начислить самому себе и пришлёт ему заявки на бронь.">
               <input inputMode="numeric" className={inputClass} value={edit.value.vkId ?? ''} onChange={(e) => setEdit({ ...edit, value: { ...edit.value, vkId: e.target.value } })} />
             </Field>
             <Field label={edit.hasPin ? 'Новый ПИН-код (пусто — не менять)' : 'ПИН-код (4–8 цифр)'} hint="Для общего планшета у бара.">
@@ -424,6 +500,22 @@ const StaffAdmin: React.FC = () => {
             >
               Сохранить
             </Button>
+            {edit.id && (
+              <Button
+                variant="ghost"
+                className="w-full"
+                disabled={saver.busy}
+                onClick={async () => {
+                  if (!confirmDelete) return setConfirmDelete(true);
+                  if (await saver.run(() => adminApi.deleteStaff(edit.id!), 'Сотрудник удалён.')) {
+                    setEdit(null);
+                    void list.reload();
+                  }
+                }}
+              >
+                <Trash2 className="w-4 h-4" /> {confirmDelete ? 'Точно удалить? Записи журнала останутся' : 'Удалить сотрудника'}
+              </Button>
+            )}
           </div>
         )}
       </Sheet>
@@ -444,6 +536,7 @@ const ACTION_LABELS: Record<string, string> = {
   StaffChanged: 'Сотрудники',
   CatalogChanged: 'Каталог',
   AfishaChanged: 'Афиша',
+  GuestAdjusted: 'Корректировка баллов',
 };
 
 const AuditLog: React.FC = () => {

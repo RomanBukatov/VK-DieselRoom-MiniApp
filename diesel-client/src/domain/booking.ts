@@ -1,4 +1,4 @@
-import type { BookingFormat, BookingStatus } from '../types';
+import type { AfishaEvent, Booking, BookingFormat, BookingStatus } from '../types';
 import { PERM_OFFSET_MS, permDateString } from '../utils/format';
 
 export const BOOKING_FORMATS: { value: BookingFormat; label: string }[] = [
@@ -69,6 +69,28 @@ export function validateBooking(form: BookingForm, nowMs: number): string[] {
   if (!normalizePhone(form.phone)) errors.push('Укажите телефон: +7 XXX XXX-XX-XX.');
   if (form.wishes.length > 500) errors.push('Пожелания — не длиннее 500 символов.');
   return errors;
+}
+
+/** Стартовые значения формы: дата и время события (если оно ещё впереди), иначе завтра в 20:00. */
+export function initialBookingForm(event: AfishaEvent | null, name: string, phone: string | null, nowMs: number): BookingForm {
+  const today = permDateString(nowMs);
+  const eventAhead = event?.eventDate && event.eventDate >= today;
+  return {
+    date: eventAhead ? event.eventDate! : permDateString(nowMs + 86_400_000),
+    time: eventAhead && event.eventTime ? event.eventTime.slice(0, 5) : '20:00',
+    guestsCount: 2,
+    format: event?.defaultFormat ?? 'Hall',
+    name,
+    phone: phone ? `+${phone}` : '',
+    wishes: '',
+  };
+}
+
+export type BookingsTab = 'active' | 'archive';
+
+/** «Активные»: ждут подтверждения или подтверждены, дата ещё не прошла. Остальное — «Архив». */
+export function bookingsTabOf(booking: Pick<Booking, 'status' | 'date'>, nowMs: number): BookingsTab {
+  return canGuestCancel(booking.status) && booking.date >= permDateString(nowMs) ? 'active' : 'archive';
 }
 
 export const canGuestCancel = (status: BookingStatus) => status === 'Pending' || status === 'Confirmed';

@@ -1,13 +1,58 @@
 import React, { useState } from 'react';
 import { Flame, QrCode as QrIcon } from 'lucide-react';
 import { KeyIcon } from '../../components/Icon';
-import { Card, Pill, Sheet } from '../../components/ui';
+import { AgeBadge, Card, Pill, Sheet } from '../../components/ui';
 import { AntMascot, CoinIcon } from '../../components/Brand';
 import { QrCode } from '../../components/QrCode';
+import { NextPlaceBanner, RaceCountdown } from '../../components/RaceStatus';
 import { STREAK_PRIZE, streakText, usageText } from '../../domain/privileges';
-import type { Profile } from '../../types';
+import { usePrivilegeCode } from '../../store/usePrivilegeCode';
+import { useNow } from '../../store/useNow';
+import { formatPoints, formatPrivilegeCode } from '../../utils/format';
+import type { GuestLevel, Profile } from '../../types';
 
-/** Кошелёк баллов, очки рейтинга и текущая привилегия по месту в «Гонке недели». */
+/** Уровень гостя и прогресс до следующего. */
+const LevelBar: React.FC<{ level: GuestLevel }> = ({ level }) => (
+  <div className="mt-4">
+    <div className="flex items-baseline justify-between gap-2">
+      <div className="text-sm font-black">{level.title}</div>
+      <div className="text-[11px] text-dr-muted">
+        {level.nextTitle && level.pointsToNext != null ? `до «${level.nextTitle}»: ${formatPoints(level.pointsToNext)}` : 'высший уровень'}
+      </div>
+    </div>
+    <div
+      className="mt-1.5 h-2 rounded-full bg-dr-surface border border-dr-border overflow-hidden"
+      role="progressbar"
+      aria-valuenow={level.progressPercent}
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-label={`Уровень ${level.title}`}
+    >
+      <div className="h-full bg-dr-red rounded-full transition-all" style={{ width: `${level.progressPercent}%` }} />
+    </div>
+  </div>
+);
+
+/** Код и QR привилегии: их показывает официанту только тот, у кого открыт профиль этого гостя. */
+const PrivilegeCodeBlock: React.FC = () => {
+  const code = usePrivilegeCode(true);
+  const now = useNow(1000);
+  if (!code) return <div className="mt-3 h-[120px] rounded-xl bg-dr-surface border border-dr-border animate-pulse" />;
+
+  const secondsLeft = Math.max(0, Math.ceil((code.refreshAt - now) / 1000));
+  return (
+    <div className="mt-3 flex items-center gap-3 rounded-xl bg-dr-surface border border-dr-border p-3">
+      <QrCode value={code.qrValue} size={104} label={`QR-код привилегии ${code.code}`} />
+      <div className="min-w-0">
+        <div className="text-[11px] uppercase tracking-wider text-dr-muted">Код для официанта</div>
+        <div className="text-2xl font-black tracking-wider text-dr-red-light tabular-nums whitespace-nowrap">{formatPrivilegeCode(code.code)}</div>
+        <div className="text-[11px] text-dr-muted mt-0.5">Обновится через {secondsLeft} с</div>
+      </div>
+    </div>
+  );
+};
+
+/** Кошелёк баллов, уровень, очки рейтинга и текущая привилегия по месту в «Гонке недели». */
 export const WalletCard: React.FC<{ profile: Profile }> = ({ profile }) => {
   const [cardOpen, setCardOpen] = useState(false);
   const p = profile.privilege;
@@ -40,6 +85,8 @@ export const WalletCard: React.FC<{ profile: Profile }> = ({ profile }) => {
           <div className="text-xs text-dr-muted pb-0.5">баллов на подарки</div>
         </div>
 
+        <LevelBar level={profile.level} />
+
         <div className="grid grid-cols-3 gap-2 mt-4">
           <Stat label="Неделя" value={profile.weeklyRating} sub={profile.weeklyRank ? `#${profile.weeklyRank}` : '—'} />
           <Stat label="За всё время" value={profile.totalRating} sub={profile.totalRank ? `#${profile.totalRank}` : '—'} />
@@ -64,6 +111,7 @@ export const WalletCard: React.FC<{ profile: Profile }> = ({ profile }) => {
             <div className="flex flex-wrap gap-1.5 mt-2">
               <Pill tone={p.allowed ? 'green' : 'muted'}>{p.allowed ? 'Можно получить сейчас' : 'Сейчас недоступно'}</Pill>
               {usageText(p) && <Pill>{usageText(p)}</Pill>}
+              {p.ageRestricted && <AgeBadge />}
             </div>
             {!p.allowed && p.reason && <div className="text-[11px] text-dr-muted mt-1.5">{p.reason}</div>}
             {streak && (
@@ -71,13 +119,22 @@ export const WalletCard: React.FC<{ profile: Profile }> = ({ profile }) => {
                 <Flame className="w-3.5 h-3.5 shrink-0" /> {streak} → спецприз «{STREAK_PRIZE}»
               </div>
             )}
-            <div className="text-[11px] text-dr-muted mt-2">Назовите официанту номер карты — привилегия проверяется по текущему месту.</div>
+            {p.allowed && (
+              <>
+                <PrivilegeCodeBlock />
+                <div className="text-[11px] text-dr-muted mt-2">Покажите код или QR официанту. Код меняется каждую минуту и срабатывает один раз.</div>
+              </>
+            )}
           </>
         ) : (
           <div className="text-sm text-dr-muted mt-1">
             Войдите в топ-50 «Гонки недели», чтобы получить привилегию: от коктейля до бесплатного бизнес-ланча.
           </div>
         )}
+        <div className="mt-3 space-y-2">
+          <NextPlaceBanner race={profile.race} rank={profile.weeklyRank} />
+          <RaceCountdown until={profile.nextWeeklyResetAt} />
+        </div>
       </Card>
 
       <Sheet open={cardOpen} onClose={() => setCardOpen(false)} title="Карта гостя">

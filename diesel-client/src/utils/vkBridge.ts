@@ -115,14 +115,36 @@ export function triggerHaptic(style: 'light' | 'medium' | 'heavy' = 'medium'): v
   }
 }
 
-/** Разрешение на сообщения от группы DIESEL ROOM — туда приходят подтверждения броней и уведомления рейтинга. */
+/** Разрешение на сообщения от группы DIESEL ROOM — туда приходят подтверждения броней и уведомления рейтинга. Ждём, пока гость ответит в диалоге ВК. */
 export async function requestGroupMessages(groupId: number = BRAND.vkGroupId): Promise<boolean> {
   if (!isVkEnvironment()) return false;
   try {
-    await sendWithTimeout(vkBridge.send('VKWebAppAllowMessagesFromGroup', { group_id: groupId }), 6000);
+    await sendWithTimeout(vkBridge.send('VKWebAppAllowMessagesFromGroup', { group_id: groupId }), 60_000);
     return true;
   } catch {
     return false;
+  }
+}
+
+/** Подписка на группу через диалог ВК. Бонус начисляет сервер по событию ВК, а не этот вызов. */
+export async function joinVkGroup(groupId: number = BRAND.vkGroupId): Promise<boolean> {
+  if (!isVkEnvironment()) return false;
+  try {
+    await sendWithTimeout(looseSend()('VKWebAppJoinGroup', { group_id: groupId }), 60_000);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Сканер QR в мобильном ВК. null — сканер недоступен (браузер, компьютер) или гость его закрыл: тогда код вводят вручную. */
+export async function scanQrCode(): Promise<string | null> {
+  if (!isVkEnvironment()) return null;
+  try {
+    const result = (await looseSend()('VKWebAppOpenCodeReader')) as { code_data?: string } | undefined;
+    return result?.code_data?.trim() || null;
+  } catch {
+    return null;
   }
 }
 

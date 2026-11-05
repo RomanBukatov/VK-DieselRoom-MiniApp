@@ -8,7 +8,7 @@ namespace DieselRoom.Infrastructure.Services;
 /// <summary>
 /// Фоновые задачи программы лояльности (раз в минуту):
 /// 1) просроченные купоны → Expired с возвратом баллов и товара на склад;
-/// 2) уведомления «Вас обошли» при смещении из призового тира;
+/// 2) уведомления «Вас сместили» при выпадении из призового тира и «До приза осталось X очков» при приближении к нему;
 /// 3) в 23:59 по Перми — срез лидера дня (трекер 7 дней на 1-м месте), затем в воскресенье — сброс недели.
 /// </summary>
 public sealed class LoyaltyBackgroundWorker : BackgroundService
@@ -72,11 +72,21 @@ public sealed class LoyaltyBackgroundWorker : BackgroundService
         var rating = services.GetRequiredService<RatingService>();
         var notifier = services.GetRequiredService<IGuestNotifier>();
 
+        var displaced = new HashSet<int>();
         await SafeAsync("уведомления о смещении", async () =>
         {
             foreach (var notice in await rating.DetectDisplacementsAsync(now, ct))
             {
+                displaced.Add(notice.UserId);
                 notifier.Send(notice.VkId, notice.Message, $"смещение #{notice.OldRank}→#{notice.NewRank}");
+            }
+        });
+
+        await SafeAsync("уведомления о приближении к призу", async () =>
+        {
+            foreach (var notice in await rating.DetectApproachesAsync(now, displaced, ct))
+            {
+                notifier.Send(notice.VkId, notice.Message, $"приближение к {notice.Goal}: {notice.PointsLeft}");
             }
         });
 

@@ -11,6 +11,7 @@ namespace DieselRoom.Infrastructure.Services;
 public class SettingsService
 {
     public const string RatesKey = "loyalty.rates";
+    public const string LevelsKey = "loyalty.levels";
     public const string LastClosedWeekKey = "race.lastClosedWeek";
 
     private readonly AppDbContext _db;
@@ -37,6 +38,24 @@ public class SettingsService
     public Task SaveRatesAsync(LoyaltyRates rates, CancellationToken ct = default) =>
         SetAsync(RatesKey, JsonSerializer.Serialize(rates), ct);
 
+    public async Task<IReadOnlyList<LevelRule>> GetLevelsAsync(CancellationToken ct = default)
+    {
+        var raw = await GetAsync(LevelsKey, ct);
+        if (string.IsNullOrWhiteSpace(raw)) return GuestLevels.Default;
+        try
+        {
+            var levels = JsonSerializer.Deserialize<List<LevelRule>>(raw);
+            return levels != null && !GuestLevels.Validate(levels).Any() ? levels : GuestLevels.Default;
+        }
+        catch (JsonException)
+        {
+            return GuestLevels.Default;
+        }
+    }
+
+    public Task SaveLevelsAsync(IReadOnlyList<LevelRule> levels, CancellationToken ct = default) =>
+        SetAsync(LevelsKey, JsonSerializer.Serialize(levels), ct);
+
     public async Task<string?> GetAsync(string key, CancellationToken ct = default) =>
         await _db.AppSettings.AsNoTracking().Where(s => s.Key == key).Select(s => s.Value).FirstOrDefaultAsync(ct);
 
@@ -57,11 +76,19 @@ public class SettingsService
 }
 
 /// <summary>Кто выполняет действие в панели персонала.</summary>
-public sealed record StaffIdentity(StaffRole Role, int? StaffMemberId, string Name, string? VkId)
+/// <param name="VkId">VK ID, с которого выполнен вход (на общем планшете — учётная запись планшета).</param>
+/// <param name="LinkedVkId">VK ID, привязанный к сотруднику в админке: его личный профиль гостя.</param>
+public sealed record StaffIdentity(StaffRole Role, int? StaffMemberId, string Name, string? VkId, string? LinkedVkId = null)
 {
     public static readonly StaffIdentity Guest = new(StaffRole.Guest, null, string.Empty, null);
     public bool IsStaff => Role >= StaffRole.Staff;
     public bool IsAdmin => Role == StaffRole.Admin;
+
+    /// <summary>Сотрудник не начисляет и не выдаёт ничего самому себе: ни со своего телефона, ни по своему ПИН-коду.</summary>
+    public bool IsSelf(string? guestVkId) =>
+        !string.IsNullOrWhiteSpace(guestVkId) && (guestVkId == VkId || guestVkId == LinkedVkId);
+
+    public const string SelfServiceError = "Нельзя начислять и выдавать самому себе: попросите другого сотрудника.";
 }
 
 public static class StaffAudit

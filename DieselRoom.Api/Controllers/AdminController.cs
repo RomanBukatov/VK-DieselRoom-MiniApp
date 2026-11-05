@@ -14,8 +14,8 @@ using Microsoft.EntityFrameworkCore;
 namespace DieselRoom.Api.Controllers;
 
 /// <summary>
-/// Панель администратора (Стас, Фёдор): афиша, баннер и ссылки меню, каталог подарков, ставки начисления,
-/// сотрудники (VK ID / ПИН-коды) и журнал аудита персонала.
+/// Панель администратора (Стас, Фёдор): афиша, баннер и ссылки меню, каталог и фото подарков, ставки и уровни,
+/// гости с ручной корректировкой, сотрудники (VK ID / ПИН-коды) и журнал аудита персонала.
 /// </summary>
 [ApiController]
 [Route("api/admin")]
@@ -45,8 +45,9 @@ public class AdminController : ControllerBase
         await _db.SaveChangesAsync(ct);
     }
 
+    /// <summary>Фото подарка: файл из клиента (/prizes/...) или загруженное через админку (/api/media/...).</summary>
     private static bool IsPrizeImagePath(string path) =>
-        Regex.IsMatch(path, @"^/prizes/[a-z0-9-]{1,60}\.(webp|jpg|png)$");
+        Regex.IsMatch(path, @"^(/prizes/[a-z0-9-]{1,60}\.(webp|jpg|png)|/api/media/\d{1,10})$");
 
     private static string? ValidUrl(string? url) =>
         string.IsNullOrWhiteSpace(url) ? null
@@ -141,6 +142,7 @@ public class AdminController : ControllerBase
         var image = ValidUrl(r.ImageUrl);
         if (product == "invalid" || image == "invalid") return Error("Ссылки должны начинаться с https://");
         if (!Enum.IsDefined(r.DefaultFormat)) return Error("Неизвестный формат брони.");
+        if (r.ProductLabel is { Length: > 60 }) return Error("Подпись кнопки — не длиннее 60 символов.");
 
         var ev = id.HasValue ? await _db.AfishaEvents.FirstOrDefaultAsync(e => e.Id == id, ct) : new AfishaEvent { CreatedAt = Now };
         if (ev == null) return Error("Мероприятие не найдено.", 404);
@@ -148,7 +150,10 @@ public class AdminController : ControllerBase
         ev.Tagline = string.IsNullOrWhiteSpace(r.Tagline) ? null : r.Tagline.Trim();
         ev.Description = string.IsNullOrWhiteSpace(r.Description) ? null : r.Description.Trim();
         ev.ProductUrl = product;
+        ev.ProductLabel = string.IsNullOrWhiteSpace(r.ProductLabel) ? null : r.ProductLabel.Trim();
         ev.ImageUrl = image;
+        ev.EventDate = r.EventDate;
+        ev.EventTime = r.EventDate.HasValue ? r.EventTime : null;
         ev.AllowBooking = r.AllowBooking;
         ev.DefaultFormat = r.DefaultFormat;
         ev.IsActive = r.IsActive;
@@ -199,12 +204,116 @@ public class AdminController : ControllerBase
         item.ImageUrl = string.IsNullOrEmpty(image) ? null : IsPrizeImagePath(image) ? image : ValidUrl(image);
         item.PriceCoins = r.PriceCoins;
         item.StockCount = r.StockCount;
+        item.AgeRestricted = r.AgeRestricted;
         item.IsActive = r.IsActive;
         item.SortOrder = r.SortOrder;
         if (!id.HasValue) _db.ShopItems.Add(item);
         await SaveWithAuditAsync(StaffAuditActions.CatalogChanged,
             $"Подарок «{item.Title}»: {item.PriceCoins} баллов, остаток {item.StockCount}{(item.IsActive ? "" : " (скрыт)")}", ct);
         return ShopItemDto.From(item);
+    }
+
+    // ---------------- Фото подарков ----------------
+
+    /// <summary>
+    /// Загрузка фото файлом (Data URL): хранится в базе и отдаётся по /api/media/{id}. В каталоге остаётся только адрес,
+    /// поэтому список подарков не раздувается картинками и не забивает кэш телефона.
+    /// </summary>
+    [HttpPost("media")]
+    public async Task<ActionResult<MediaUploadResultDto>> UploadMedia([FromBody] UploadMediaRequest request, CancellationToken ct)
+    {
+        var parsed = MediaFiles.ParseDataUrl(request.DataUrl);
+        if (parsed == null) return Error($"Нужно фото JPEG, PNG или WebP размером до {MediaFiles.MaxBytes / 1024 / 1024} МБ.");
+
+        var file = new MediaFile { ContentType = parsed.Value.ContentType, Bytes = parsed.Value.Bytes, CreatedAt = Now };
+        _db.MediaFiles.Add(file);
+        await _db.SaveChangesAsync(ct);
+        await SaveWithAuditAsync(StaffAuditActions.CatalogChanged, $"Загружено фото №{file.Id}, {file.Bytes.Length / 1024} КБ", ct);
+        return new MediaUploadResultDto($"/api/media/{file.Id}");
+    }
+
+    // ---------------- Гости ----------------
+
+    [HttpGet("guests")]
+    public async Task<IEnumerable<AdminGuestDto>> Guests([FromQuery] string? q, [FromQuery] int skip = 0, [FromQuery] int take = 50, CancellationToken ct = default)
+    {
+        take = Math.Clamp(take, 1, 100);
+        var query = _db.Users.AsNoTracking().AsQueryable();
+        if (!string.IsNullOrWhiteSpace(q))
+        {
+            var term = q.Trim();
+            var lowered = term.ToLowerInvariant();
+            var digits = new string(term.Where(char.IsDigit).ToArray());
+            query = query.Where(u => u.CardNumber == term || u.VkId == term ||
+                                     (digits.Length >= 4 && u.Phone != null && u.Phone.Contains(digits)) ||
+                                     u.FirstName.ToLower().Contains(lowered) || u.LastName.ToLower().Contains(lowered) ||
+                                     (u.FirstName + " " + u.LastName).ToLower().Contains(lowered));
+        }
+
+        var levels = await _settings.GetLevelsAsync(ct);
+        var users = await query.OrderByDescending(u => u.LastSeenAt).ThenByDescending(u => u.Id).Skip(Math.Max(skip, 0)).Take(take).ToListAsync(ct);
+        return users.Select(u => new AdminGuestDto(u.Id, u.VkId, u.CardNumber, u.DisplayName, u.PhotoUrl, u.Phone,
+            u.DieselCoinsBalance, u.WeeklyRating, u.TotalRating, u.VisitsCount,
+            GuestLevels.Compute(u.TotalRating, levels).Title, u.ConsentAcceptedAt, u.LastSeenAt));
+    }
+
+    [HttpGet("guests/{id:int}/transactions")]
+    public async Task<IEnumerable<PointsTransactionDto>> GuestTransactions(int id, CancellationToken ct) =>
+        await _db.PointsTransactions.AsNoTracking()
+            .Where(t => t.UserId == id)
+            .OrderByDescending(t => t.CreatedAt).ThenByDescending(t => t.Id)
+            .Take(30)
+            .Select(t => new PointsTransactionDto(t.Id, t.Coins, t.Rating, t.Type, t.Description, t.CreatedAt))
+            .ToListAsync(ct);
+
+    /// <summary>Ручная корректировка баллов и рейтинга: только с причиной, запись в истории гостя и в журнале аудита.</summary>
+    [HttpPost("guests/{id:int}/adjust")]
+    public async Task<ActionResult<AdminGuestDto>> AdjustGuest(int id, [FromBody] AdjustGuestRequest r, CancellationToken ct)
+    {
+        var reason = r.Reason?.Trim() ?? string.Empty;
+        if (reason.Length is < 3 or > 200) return Error("Укажите причину корректировки (от 3 до 200 символов).");
+        if (r.Coins == 0 && r.Rating == 0) return Error("Укажите, сколько баллов или очков изменить.");
+        if (Math.Abs(r.Coins) > 100_000 || Math.Abs(r.Rating) > 100_000) return Error("Изменение — не больше 100 000 за раз.");
+
+        await using var tx = await _db.Database.BeginTransactionAsync(ct);
+        await _db.LockRowAsync("Users", id, ct);
+
+        var guest = await _db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == id, ct);
+        if (guest == null) return Error("Гость не найден.", 404);
+        if (Admin.IsSelf(guest.VkId)) return Error(StaffIdentity.SelfServiceError, 403);
+
+        if (!await Ledger.AdjustAsync(_db, id, r.Coins, r.Rating, $"Корректировка: {reason}", Now, ct))
+        {
+            return Error($"Нельзя списать {-r.Coins}: на балансе гостя {guest.DieselCoinsBalance}.", 409);
+        }
+
+        StaffAudit.Add(_db, Admin, StaffAuditActions.GuestAdjusted, guest,
+            details: $"Баллы {r.Coins:+0;-0;0}, рейтинг {r.Rating:+0;-0;0}. Причина: {reason}", now: Now);
+        await _db.SaveChangesAsync(ct);
+        await tx.CommitAsync(ct);
+
+        var fresh = await _db.Users.AsNoTracking().FirstAsync(u => u.Id == id, ct);
+        var levels = await _settings.GetLevelsAsync(ct);
+        return new AdminGuestDto(fresh.Id, fresh.VkId, fresh.CardNumber, fresh.DisplayName, fresh.PhotoUrl, fresh.Phone,
+            fresh.DieselCoinsBalance, fresh.WeeklyRating, fresh.TotalRating, fresh.VisitsCount,
+            GuestLevels.Compute(fresh.TotalRating, levels).Title, fresh.ConsentAcceptedAt, fresh.LastSeenAt);
+    }
+
+    // ---------------- Уровни гостя ----------------
+
+    [HttpGet("levels")]
+    public Task<IReadOnlyList<LevelRule>> Levels(CancellationToken ct) => _settings.GetLevelsAsync(ct);
+
+    [HttpPut("levels")]
+    public async Task<ActionResult<IReadOnlyList<LevelRule>>> UpdateLevels([FromBody] List<LevelRule> levels, CancellationToken ct)
+    {
+        var errors = GuestLevels.Validate(levels).Distinct().ToList();
+        if (errors.Count > 0) return Error(string.Join(" ", errors));
+        var clean = levels.Select(l => l with { Title = l.Title.Trim() }).ToList();
+        await _settings.SaveLevelsAsync(clean, ct);
+        await SaveWithAuditAsync(StaffAuditActions.SettingsChanged,
+            "Уровни гостя: " + string.Join(", ", clean.Select(l => $"{l.Title} от {l.MinRating}")), ct);
+        return clean;
     }
 
     // ---------------- Ставки начисления ----------------
@@ -262,6 +371,19 @@ public class AdminController : ControllerBase
             $"Сотрудник «{member.Name}»: {(member.Role == StaffRole.Admin ? "администратор" : "сотрудник")}" +
             $"{(vkId != null ? $", VK {vkId}" : "")}{(pin != null ? ", ПИН обновлён" : "")}{(member.IsActive ? "" : ", отключён")}", ct);
         return StaffMemberDto.From(member);
+    }
+
+    /// <summary>Удаление сотрудника. Записи журнала остаются: в них имя сохранено отдельно. Удалить самого себя нельзя.</summary>
+    [HttpDelete("staff/{id:int}")]
+    public async Task<IActionResult> DeleteStaff(int id, CancellationToken ct)
+    {
+        var member = await _db.StaffMembers.FirstOrDefaultAsync(s => s.Id == id, ct);
+        if (member == null) return Error("Сотрудник не найден.", 404);
+        if (Admin.StaffMemberId == id) return Error("Нельзя удалить самого себя.", 409);
+
+        _db.StaffMembers.Remove(member);
+        await SaveWithAuditAsync(StaffAuditActions.StaffChanged, $"Сотрудник «{member.Name}» удалён", ct);
+        return NoContent();
     }
 
     // ---------------- Журнал аудита ----------------

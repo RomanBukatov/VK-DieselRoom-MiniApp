@@ -7,21 +7,28 @@ namespace DieselRoom.Api.DTOs;
 
 public sealed record PrivilegeDto(
     PrivilegeTier Tier, string? Icon, string? Title, string? Conditions, string? Label,
-    int? Rank, bool Allowed, int Used, int? Limit, string? Reason, int FirstPlaceStreak, int StreakTarget)
+    int? Rank, bool Allowed, int Used, int? Limit, string? Reason, int FirstPlaceStreak, int StreakTarget, bool AgeRestricted)
 {
     public static PrivilegeDto From(ActivePrivilege p) => new(
         p.Tier, p.Info?.Icon, p.Info?.Title, p.Info?.Conditions, p.Info?.Label,
         p.Rank, p.Availability.Allowed, p.Availability.Used, p.Availability.Limit, p.Availability.Reason,
-        p.FirstPlaceStreak, PrivilegeCatalog.FirstPlaceStreakTarget);
+        p.FirstPlaceStreak, PrivilegeCatalog.FirstPlaceStreakTarget, p.Info?.AgeRestricted ?? false);
 }
 
-public sealed record ReferralInfoDto(string Code, int InvitedCount, int RewardedCount, int RewardCoins, int RewardRating);
+public sealed record PrivilegeCodeDto(string Code, string QrValue, DateTime ExpiresAt, int SecondsLeft);
+
+public sealed record ReferralInfoDto(string Code, int InvitedCount, int RewardedCount, int RewardCoins, int RewardRating, bool HasInviter, bool CanEnterCode);
+
+/// <summary>Задание из блока «Как заработать баллы». OneTime — разовое: Done показывает, выполнено ли оно.</summary>
+public sealed record GuestTaskDto(string Key, string Title, string Hint, int Coins, int Rating, bool OneTime, bool Done, string? Action);
 
 public sealed record ProfileDto(
     int Id, string VkId, string CardNumber, string FirstName, string LastName, string? PhotoUrl, string? Phone,
     int Coins, int TotalCoinsEarned, int WeeklyRating, int TotalRating, int? WeeklyRank, int? TotalRank, int VisitsCount,
     PrivilegeDto Privilege, IReadOnlyList<Achievement> Achievements, ReferralInfoDto Referral,
-    StaffRole Role, string? StaffName, DateTime NextWeeklyResetAt);
+    StaffRole Role, string? StaffName, DateTime NextWeeklyResetAt,
+    bool ConsentRequired, DateTime? ConsentAcceptedAt, bool ProfileCompleted,
+    GuestLevel Level, RaceProgress Race, IReadOnlyList<GuestTaskDto> Tasks);
 
 public sealed record PointsTransactionDto(int Id, int Coins, int Rating, string Type, string Description, DateTime CreatedAt);
 
@@ -36,16 +43,16 @@ public sealed record PrivilegeInfoDto(PrivilegeTier Tier, int TopRank, int Botto
     public static PrivilegeInfoDto From(PrivilegeInfo i) => new(i.Tier, i.TopRank, i.BottomRank, i.Icon, i.Title, i.Conditions);
 }
 
-public sealed record ShopItemDto(int Id, string Title, string? Description, string Icon, string? ImageUrl, int PriceCoins, int StockCount, bool IsActive, int SortOrder)
+public sealed record ShopItemDto(int Id, string Title, string? Description, string Icon, string? ImageUrl, int PriceCoins, int StockCount, bool IsActive, int SortOrder, bool AgeRestricted)
 {
-    public static ShopItemDto From(ShopItem i) => new(i.Id, i.Title, i.Description, i.Icon, i.ImageUrl, i.PriceCoins, i.StockCount, i.IsActive, i.SortOrder);
+    public static ShopItemDto From(ShopItem i) => new(i.Id, i.Title, i.Description, i.Icon, i.ImageUrl, i.PriceCoins, i.StockCount, i.IsActive, i.SortOrder, i.AgeRestricted);
 }
 
 public sealed record ShopOrderDto(int Id, string Code, string Title, string Icon, string? ImageUrl, int PriceCoins, ShopOrderStatus Status,
-    DateTime CreatedAt, DateTime ExpiresAt, DateTime? IssuedAt, DateTime? ClosedAt, bool IsPrize)
+    DateTime CreatedAt, DateTime ExpiresAt, DateTime? IssuedAt, DateTime? ClosedAt, bool IsPrize, bool AgeRestricted)
 {
     public static ShopOrderDto From(ShopOrder o) => new(o.Id, o.Code, o.Title, o.Icon, o.ImageUrl, o.PriceCoins, o.Status,
-        o.CreatedAt, o.ExpiresAt, o.IssuedAt, o.ClosedAt, o.ShopItemId == null);
+        o.CreatedAt, o.ExpiresAt, o.IssuedAt, o.ClosedAt, o.ShopItemId == null, o.AgeRestricted);
 }
 
 public sealed record PurchaseResultDto(ShopOrderDto Order, int Coins);
@@ -60,29 +67,31 @@ public sealed record MenuLinkDto(int Id, string Key, string Icon, string Title, 
     public static MenuLinkDto From(MenuLink m) => new(m.Id, m.Key, m.Icon, m.Title, m.Url, m.HiddenAfter, m.IsActive, m.SortOrder);
 }
 
-public sealed record AfishaEventDto(int Id, string Title, string? Tagline, string? Description, string? ProductUrl, string? ImageUrl,
-    bool AllowBooking, BookingFormat DefaultFormat, bool IsActive, int SortOrder)
+public sealed record AfishaEventDto(int Id, string Title, string? Tagline, string? Description, string? ProductUrl, string? ProductLabel, string? ImageUrl,
+    DateOnly? EventDate, TimeOnly? EventTime, bool AllowBooking, BookingFormat DefaultFormat, bool IsActive, int SortOrder)
 {
-    public static AfishaEventDto From(AfishaEvent e) => new(e.Id, e.Title, e.Tagline, e.Description, e.ProductUrl, e.ImageUrl,
-        e.AllowBooking, e.DefaultFormat, e.IsActive, e.SortOrder);
+    public static AfishaEventDto From(AfishaEvent e) => new(e.Id, e.Title, e.Tagline, e.Description, e.ProductUrl, e.ProductLabel, e.ImageUrl,
+        e.EventDate, e.EventTime, e.AllowBooking, e.DefaultFormat, e.IsActive, e.SortOrder);
 }
 
 public sealed record AfishaDto(IReadOnlyList<BannerDto> Banners, IReadOnlyList<MenuLinkDto> Menu, IReadOnlyList<AfishaEventDto> Events);
 
 public sealed record BookingDto(int Id, int UserId, DateOnly Date, TimeOnly Time, int GuestsCount, BookingFormat Format,
-    string Name, string Phone, string? Wishes, int? AfishaEventId, BookingStatus Status, string StatusLabel,
+    string Name, string Phone, string? Wishes, int? AfishaEventId, string? EventTitle, BookingStatus Status, string StatusLabel,
     string? StaffComment, string? ProcessedByStaffName, DateTime CreatedAt)
 {
     public static BookingDto From(Booking b) => new(b.Id, b.UserId, b.Date, b.Time, b.GuestsCount, b.Format, b.Name, b.Phone,
-        b.Wishes, b.AfishaEventId, b.Status, BookingService.StatusLabel(b.Status), b.StaffComment, b.ProcessedByStaffName, b.CreatedAt);
+        b.Wishes, b.AfishaEventId, b.EventTitle, b.Status, BookingService.StatusLabel(b.Status), b.StaffComment, b.ProcessedByStaffName, b.CreatedAt);
 }
 
 public sealed record GuestCardDto(int UserId, string Name, string CardNumber, string? Phone, string? PhotoUrl,
     int Coins, int WeeklyRating, int VisitsCount, PrivilegeDto Privilege);
 
-public sealed record StaffOrderDto(ShopOrderDto Order, int UserId, string GuestName, string CardNumber);
+public sealed record StaffOrderDto(ShopOrderDto Order, int UserId, string GuestName, string CardNumber, string? PhotoUrl);
 
-public sealed record StaffLookupDto(StaffOrderDto? Order, IReadOnlyList<GuestCardDto> Guests);
+/// <param name="PrivilegeCode">Код привилегии, если поиск шёл по нему: официанту не нужно вводить его ещё раз.</param>
+/// <param name="PrivilegeCodeUserIds">Гости, которым этот код подходит прямо сейчас.</param>
+public sealed record StaffLookupDto(StaffOrderDto? Order, IReadOnlyList<GuestCardDto> Guests, string? PrivilegeCode, IReadOnlyList<int> PrivilegeCodeUserIds);
 
 public sealed record VisitResultDto(int VisitId, string ReceiptNumber, int CoinsAwarded, int RatingAwarded,
     GuestCardDto Guest, bool ReferralRewardPaid, string? InviterName);
@@ -100,9 +109,20 @@ public sealed record StaffMemberDto(int Id, string Name, StaffRole Role, string?
 
 public sealed record StaffSessionDto(StaffRole Role, string Name);
 
+public sealed record AdminGuestDto(int Id, string VkId, string CardNumber, string Name, string? PhotoUrl, string? Phone,
+    int Coins, int WeeklyRating, int TotalRating, int VisitsCount, string LevelTitle, DateTime? ConsentAcceptedAt, DateTime LastSeenAt);
+
+public sealed record MediaUploadResultDto(string Url);
+
 // ---------- Запросы ----------
 
 public sealed record SyncProfileRequest(string? FirstName, string? LastName, string? PhotoUrl, string? ReferralCode);
+
+public sealed record ConsentRequest(bool AcceptTerms, bool PersonalData, bool Adult);
+
+public sealed record SaveProfileRequest(string? FirstName, string? LastName, string? Phone);
+
+public sealed record ApplyReferralRequest(string? Code);
 
 public sealed record CreateBookingRequest(string? Date, string? Time, int GuestsCount, BookingFormat Format,
     string? Name, string? Phone, string? Wishes, int? AfishaEventId);
@@ -111,7 +131,7 @@ public sealed record StaffDecisionRequest(string? Comment);
 
 public sealed record IssueCouponRequest(string? Code);
 
-public sealed record RedeemPrivilegeRequest(int UserId);
+public sealed record RedeemPrivilegeRequest(int UserId, string? Code);
 
 public sealed record AccrueVisitRequest(int UserId, string? ReceiptNumber, VisitType Type);
 
@@ -120,8 +140,13 @@ public sealed record UpsertBannerRequest(string? Title, string? Subtitle, string
 public sealed record UpdateMenuLinkRequest(string? Icon, string? Title, string? Url, DateTime? HiddenAfter, bool IsActive, int SortOrder);
 
 public sealed record UpsertAfishaEventRequest(string? Title, string? Tagline, string? Description, string? ProductUrl, string? ImageUrl,
-    bool AllowBooking, BookingFormat DefaultFormat, bool IsActive, int SortOrder);
+    bool AllowBooking, BookingFormat DefaultFormat, bool IsActive, int SortOrder,
+    string? ProductLabel = null, DateOnly? EventDate = null, TimeOnly? EventTime = null);
 
-public sealed record UpsertShopItemRequest(string? Title, string? Description, string? Icon, string? ImageUrl, int PriceCoins, int StockCount, bool IsActive, int SortOrder);
+public sealed record UpsertShopItemRequest(string? Title, string? Description, string? Icon, string? ImageUrl, int PriceCoins, int StockCount, bool IsActive, int SortOrder, bool AgeRestricted = false);
 
 public sealed record UpsertStaffMemberRequest(string? Name, StaffRole Role, string? VkId, string? Pin, bool IsActive);
+
+public sealed record AdjustGuestRequest(int Coins, int Rating, string? Reason);
+
+public sealed record UploadMediaRequest(string? DataUrl);
