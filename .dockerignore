@@ -5,4 +5,5 @@
 .git/
 .vs/
 .env
+backups/
 DieselRoom.Tests/

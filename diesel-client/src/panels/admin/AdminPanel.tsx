@@ -606,6 +606,7 @@ const ACTION_LABELS: Record<string, string> = {
   CatalogChanged: 'Каталог',
   AfishaChanged: 'Афиша',
   GuestAdjusted: 'Корректировка баллов',
+  DataReset: 'Очистка после приёмки',
 };
 
 const AuditLog: React.FC = () => {

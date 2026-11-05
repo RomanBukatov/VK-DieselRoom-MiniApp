@@ -147,6 +147,29 @@ public class LedgerTests
         Assert.Equal(100, t.GetUser(guest.Id).DieselCoinsBalance);
     }
 
+    /// <summary>Появится новая таблица — скрипт очистки заставит решить, стирать её после приёмки или хранить.</summary>
+    [Fact]
+    public void ResetScript_ClassifiesEveryTable()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir != null && !File.Exists(Path.Combine(dir.FullName, "DieselRoomApp.slnx"))) dir = dir.Parent;
+        var sql = File.ReadAllText(Path.Combine(dir!.FullName, "scripts", "reset-acceptance-data.sql"));
+
+        string[] Listed(string marker) => Regex.Match(sql, $@"^-- {marker}:\s*(.+?)\s*$", RegexOptions.Multiline).Groups[1].Value.Split(", ");
+        var clear = Listed("CLEAR");
+        var keep = Listed("KEEP");
+
+        using var t = new TestDb();
+        using var db = t.NewContext();
+        var tables = db.Model.GetEntityTypes().Select(e => e.GetTableName()!).ToHashSet();
+        Assert.Equal(tables, clear.Concat(keep).ToHashSet());
+        Assert.Empty(clear.Intersect(keep));
+
+        // Список CLEAR и настоящий TRUNCATE не должны разойтись
+        var truncate = Regex.Match(sql, @"TRUNCATE TABLE(.+?)RESTART IDENTITY", RegexOptions.Singleline).Groups[1].Value;
+        Assert.Equal(clear.ToHashSet(), Regex.Matches(truncate, "\"(\\w+)\"").Select(m => m.Groups[1].Value).ToHashSet());
+    }
+
     /// <summary>Защита на будущее: новый код не сможет менять баланс в обход журнала.</summary>
     [Fact]
     public void OnlyLedger_ChangesBalanceAndWritesEntries()
