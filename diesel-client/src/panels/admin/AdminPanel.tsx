@@ -12,9 +12,10 @@ import { PrizeVisual } from '../../components/Brand';
 import { formatFullDate, formatPermDateTime } from '../../utils/format';
 import { imageFileToDataUrl } from '../../utils/imageUpload';
 import { GuestsAdmin } from './GuestsAdmin';
+import { OperationsLog } from './OperationsLog';
 import type { AchievementMetric, AchievementRule, AfishaEvent, Banner, LevelRule, LoyaltyRates, MenuLink, ShopItem, StaffAuditEntry, StaffMember } from '../../types';
 
-type Section = 'afisha' | 'shop' | 'rates' | 'guests' | 'staff' | 'audit';
+type Section = 'afisha' | 'shop' | 'rates' | 'guests' | 'operations' | 'staff' | 'audit';
 
 /** Загрузка списка + перезагрузка после сохранения. */
 function useAdminList<T>(load: () => Promise<T>) {
@@ -77,6 +78,7 @@ export const AdminPanel: React.FC = () => {
           ['shop', 'Подарки'],
           ['rates', 'Ставки и уровни'],
           ['guests', 'Гости'],
+          ['operations', 'Операции'],
           ['staff', 'Сотрудники'],
           ['audit', 'Журнал'],
         ] as [Section, string][]).map(([key, label]) => (
@@ -94,6 +96,7 @@ export const AdminPanel: React.FC = () => {
       {section === 'shop' && <ShopAdmin />}
       {section === 'rates' && <RatesAdmin />}
       {section === 'guests' && <GuestsAdmin />}
+      {section === 'operations' && <OperationsLog />}
       {section === 'staff' && <StaffAdmin />}
       {section === 'audit' && <AuditLog />}
     </div>

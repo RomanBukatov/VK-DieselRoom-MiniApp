@@ -109,7 +109,7 @@ public sealed record StaffIdentity(StaffRole Role, int? StaffMemberId, string Na
 
     /// <summary>
     /// Запрет самообслуживания касается сотрудников. Владелец и арт-директор (Admin) при приёмке проверяют программу
-    /// на себе: тестовые чеки, подарки и привилегии им разрешены, а следы остаются в журнале аудита.
+    /// на себе: тестовые чеки, начисление баллов, подарки и привилегии им разрешены, следы остаются в журнале аудита.
     /// </summary>
     public bool IsSelf(string? guestVkId) => !IsAdmin && IsSameGuest(guestVkId);
 

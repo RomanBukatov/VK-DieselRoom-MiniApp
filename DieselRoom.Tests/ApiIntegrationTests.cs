@@ -489,12 +489,58 @@ public class ApiIntegrationTests : IClassFixture<DieselApp>
         var audit = await ReadJson(await admin.GetAsync("/api/admin/audit?action=GuestAdjusted"));
         Assert.Contains(audit.EnumerateArray(), a => a.GetProperty("details").GetString()!.Contains("Баллы +50, рейтинг +7. Причина: Компенсация за сбой"));
 
-        // Себе администратор начислить не может
-        var adminMe = await ReadJson(await admin.GetAsync("/api/users/me"));
-        Assert.Equal(HttpStatusCode.Forbidden, (await admin.PostAsJsonAsync($"/api/admin/guests/{adminMe.GetProperty("id").GetInt32()}/adjust", new { coins = 1, rating = 0, reason = "Себе" })).StatusCode);
 
         var list = await ReadJson(await admin.GetAsync($"/api/admin/guests?q={me.GetProperty("cardNumber").GetString()}"));
         Assert.Equal(id, Assert.Single(list.EnumerateArray()).GetProperty("id").GetInt32());
+    }
+
+    [Fact]
+    public async Task Admin_AwardsTestPointsToSelf_BuysGift_AllInAuditAndJournal()
+    {
+        var owner = _app.ClientFor("1001"); // тот самый администратор на приёмке, со своего телефона
+        await Accept(owner);
+        var me = await ReadJson(await owner.GetAsync("/api/users/me"));
+        var myId = me.GetProperty("id").GetInt32();
+        var before = me.GetProperty("coins").GetInt32();
+
+        var adjusted = await owner.PostAsJsonAsync($"/api/admin/guests/{myId}/adjust", new { coins = 300, rating = 0, reason = "Тестовые баллы для приёмки" });
+        Assert.Equal(HttpStatusCode.OK, adjusted.StatusCode);
+        Assert.Equal(before + 300, (await ReadJson(adjusted)).GetProperty("coins").GetInt32());
+
+        var audit = await ReadJson(await owner.GetAsync("/api/admin/audit?action=GuestAdjusted"));
+        Assert.Contains(audit.EnumerateArray(), a => a.GetProperty("details").GetString()!.StartsWith("Самому себе. Баллы +300"));
+
+        var items = await ReadJson(await owner.GetAsync("/api/shop/items"));
+        var coffee = items.EnumerateArray().First(i => i.GetProperty("title").GetString() == "Кофе");
+        var bought = await owner.PostAsync($"/api/shop/items/{coffee.GetProperty("id").GetInt32()}/purchase", null);
+        Assert.Equal(HttpStatusCode.OK, bought.StatusCode);
+        var code = (await ReadJson(bought)).GetProperty("order").GetProperty("code").GetString();
+        Assert.Equal(HttpStatusCode.OK, (await owner.PostAsJsonAsync("/api/staff/coupons/issue", new { code })).StatusCode);
+
+        var journal = await ReadJson(await owner.GetAsync($"/api/admin/transactions?q={me.GetProperty("cardNumber").GetString()}"));
+        var types = journal.EnumerateArray().Select(t => t.GetProperty("type").GetString()).ToList();
+        Assert.Contains("ManualAdjust", types);
+        Assert.Contains("ShopPurchase", types);
+
+        var purchases = await ReadJson(await owner.GetAsync("/api/admin/transactions?type=ShopPurchase&take=500"));
+        Assert.All(purchases.EnumerateArray(), t => Assert.True(t.GetProperty("coins").GetInt32() < 0));
+    }
+
+    [Fact]
+    public async Task OperationsJournal_IsAdminOnly()
+    {
+        AddStaff("Бармен Журнал", StaffRole.Staff, vkId: "4951");
+        Assert.Equal(HttpStatusCode.Forbidden, (await _app.ClientFor("4951").GetAsync("/api/admin/transactions")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await _app.ClientFor("5151").GetAsync("/api/admin/transactions")).StatusCode);
+    }
+
+    [Fact]
+    public async Task Staff_CannotAdjustOwnBalance()
+    {
+        AddStaff("Официант Себе", StaffRole.Staff, vkId: "4952");
+        var staff = _app.ClientFor("4952");
+        var me = await ReadJson(await staff.GetAsync("/api/users/me"));
+        Assert.Equal(HttpStatusCode.Forbidden, (await staff.PostAsJsonAsync($"/api/admin/guests/{me.GetProperty("id").GetInt32()}/adjust", new { coins = 100, rating = 0, reason = "Хочу баллы" })).StatusCode);
     }
 
     [Fact]

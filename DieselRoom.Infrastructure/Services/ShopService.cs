@@ -47,11 +47,14 @@ public class ShopService
             return OpResult<ShopOrder>.Fail($"Недостаточно баллов: нужно {item.PriceCoins}, у вас {balance}.", 409);
         }
 
+        var code = await GenerateUniqueCodeAsync(ct);
+
         // Условные UPDATE — вторая линия защиты: баланс и остаток не уйдут в минус даже без блокировки строк
-        var debited = await _db.Users
-            .Where(u => u.Id == userId && u.DieselCoinsBalance >= item.PriceCoins)
-            .ExecuteUpdateAsync(s => s.SetProperty(u => u.DieselCoinsBalance, u => u.DieselCoinsBalance - item.PriceCoins), ct);
-        if (debited != 1) return OpResult<ShopOrder>.Fail("Недостаточно баллов.", 409);
+        if (!await Ledger.DebitAsync(_db, userId, item.PriceCoins, PointsTransactionTypes.ShopPurchase,
+                $"Подарок «{item.Title}» (#{code})", now, ct))
+        {
+            return OpResult<ShopOrder>.Fail("Недостаточно баллов.", 409);
+        }
 
         var reserved = await _db.ShopItems
             .Where(i => i.Id == itemId && i.IsActive && i.StockCount > 0)
@@ -66,7 +69,7 @@ public class ShopService
         {
             UserId = userId,
             ShopItemId = item.Id,
-            Code = await GenerateUniqueCodeAsync(ct),
+            Code = code,
             Title = item.Title,
             Icon = item.Icon,
             ImageUrl = item.ImageUrl,
@@ -77,15 +80,6 @@ public class ShopService
             ExpiresAt = now + CouponLifetime,
         };
         _db.ShopOrders.Add(order);
-        _db.PointsTransactions.Add(new PointsTransaction
-        {
-            UserId = userId,
-            Coins = -item.PriceCoins,
-            Rating = 0,
-            Type = PointsTransactionTypes.ShopPurchase,
-            Description = $"Подарок «{item.Title}» (#{order.Code})",
-            CreatedAt = now,
-        });
         await _db.SaveChangesAsync(ct);
         await tx.CommitAsync(ct);
 

@@ -112,6 +112,9 @@ public sealed record StaffSessionDto(StaffRole Role, string Name);
 public sealed record AdminGuestDto(int Id, string VkId, string CardNumber, string Name, string? PhotoUrl, string? Phone,
     int Coins, int WeeklyRating, int TotalRating, int VisitsCount, string LevelTitle, DateTime? ConsentAcceptedAt, DateTime LastSeenAt);
 
+public sealed record AdminTransactionDto(int Id, int UserId, string GuestName, string CardNumber, int Coins, int Rating,
+    string Type, string Description, DateTime CreatedAt);
+
 public sealed record MediaUploadResultDto(string Url);
 
 // ---------- Запросы ----------

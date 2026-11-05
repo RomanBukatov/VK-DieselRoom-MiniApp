@@ -1,6 +1,6 @@
 import { apiClient } from './client';
 import type {
-  AchievementRule, AdminGuest, Afisha, AfishaEvent, Banner, Booking, BookingFormat, BookingStatus, GuestCard, Leaderboard, LevelRule, LoyaltyRates, MenuLink,
+  AchievementRule, AdminGuest, AdminTransaction, Afisha, AfishaEvent, Banner, Booking, BookingFormat, BookingStatus, GuestCard, Leaderboard, LevelRule, LoyaltyRates, MenuLink,
   PointsTransaction, PrivilegeCode, Profile, ShopItem, ShopOrder, StaffAuditEntry, StaffLookup, StaffMember, StaffRole, VisitResult, VisitType,
 } from '../types';
 
@@ -72,6 +72,7 @@ export const adminApi = {
   guests: (q?: string, skip = 0) => get<AdminGuest[]>('/api/admin/guests', { q: q || undefined, skip }),
   guestTransactions: (id: number) => get<PointsTransaction[]>(`/api/admin/guests/${id}/transactions`),
   adjustGuest: (id: number, body: { coins: number; rating: number; reason: string }) => post<AdminGuest>(`/api/admin/guests/${id}/adjust`, body),
+  transactions: (params: { q?: string; type?: string; beforeId?: number }) => get<AdminTransaction[]>('/api/admin/transactions', params),
   achievements: () => get<AchievementRule[]>('/api/admin/achievements'),
   saveAchievements: (rules: AchievementRule[]) => put<AchievementRule[]>('/api/admin/achievements', rules),
   levels: () => get<LevelRule[]>('/api/admin/levels'),

@@ -266,6 +266,34 @@ public class AdminController : ControllerBase
             .Select(t => new PointsTransactionDto(t.Id, t.Coins, t.Rating, t.Type, t.Description, t.CreatedAt))
             .ToListAsync(ct);
 
+    /// <summary>
+    /// Все движения баллов и рейтинга по всем гостям: начисления за активность и визиты, бонусы, обмен подарков,
+    /// возвраты и корректировки. Записи только добавляются, изменить или удалить их через приложение нельзя.
+    /// </summary>
+    [HttpGet("transactions")]
+    public async Task<IEnumerable<AdminTransactionDto>> Transactions([FromQuery] string? q, [FromQuery] string? type,
+        [FromQuery] int? beforeId, [FromQuery] int take = 100, CancellationToken ct = default)
+    {
+        take = Math.Clamp(take, 1, 500);
+        var query = from t in _db.PointsTransactions.AsNoTracking()
+                    join u in _db.Users.AsNoTracking() on t.UserId equals u.Id
+                    select new { t, u };
+        if (!string.IsNullOrWhiteSpace(type)) query = query.Where(x => x.t.Type == type);
+        if (beforeId.HasValue) query = query.Where(x => x.t.Id < beforeId.Value);
+        if (!string.IsNullOrWhiteSpace(q))
+        {
+            var term = q.Trim();
+            var lowered = term.ToLowerInvariant();
+            query = query.Where(x => x.u.CardNumber == term || x.u.VkId == term ||
+                                     x.u.FirstName.ToLower().Contains(lowered) || x.u.LastName.ToLower().Contains(lowered) ||
+                                     x.t.Description.ToLower().Contains(lowered));
+        }
+
+        var rows = await query.OrderByDescending(x => x.t.Id).Take(take).ToListAsync(ct);
+        return rows.Select(x => new AdminTransactionDto(x.t.Id, x.u.Id, x.u.DisplayName, x.u.CardNumber,
+            x.t.Coins, x.t.Rating, x.t.Type, x.t.Description, x.t.CreatedAt));
+    }
+
     /// <summary>Ручная корректировка баллов и рейтинга: только с причиной, запись в истории гостя и в журнале аудита.</summary>
     [HttpPost("guests/{id:int}/adjust")]
     public async Task<ActionResult<AdminGuestDto>> AdjustGuest(int id, [FromBody] AdjustGuestRequest r, CancellationToken ct)
@@ -280,16 +308,14 @@ public class AdminController : ControllerBase
 
         var guest = await _db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == id, ct);
         if (guest == null) return Error("Гость не найден.", 404);
-        // Тестовые чеки и выдачу администратор проверяет на себе, но баланс себе не правит даже он
-        if (Admin.IsSameGuest(guest.VkId)) return Error("Нельзя корректировать баллы самому себе.", 403);
+        // При приёмке администратор начисляет тестовые баллы и себе: в журнале такая запись помечена отдельно
+        var applied = await Ledger.AdjustAsync(_db, id, r.Coins, r.Rating, $"Корректировка: {reason}", Now, ct);
+        if (applied == null) return Error($"Нельзя списать {-r.Coins}: на балансе гостя {guest.DieselCoinsBalance}.", 409);
+        if (r.Coins == 0 && applied == 0) return Error("Рейтинг гостя уже равен нулю: менять нечего.", 409);
 
-        if (!await Ledger.AdjustAsync(_db, id, r.Coins, r.Rating, $"Корректировка: {reason}", Now, ct))
-        {
-            return Error($"Нельзя списать {-r.Coins}: на балансе гостя {guest.DieselCoinsBalance}.", 409);
-        }
-
+        var selfMark = Admin.IsSameGuest(guest.VkId) ? "Самому себе. " : string.Empty;
         StaffAudit.Add(_db, Admin, StaffAuditActions.GuestAdjusted, guest,
-            details: $"Баллы {r.Coins:+0;-0;0}, рейтинг {r.Rating:+0;-0;0}. Причина: {reason}", now: Now);
+            details: $"{selfMark}Баллы {r.Coins:+0;-0;0}, рейтинг {applied:+0;-0;0}. Причина: {reason}", now: Now);
         await _db.SaveChangesAsync(ct);
         await tx.CommitAsync(ct);
 

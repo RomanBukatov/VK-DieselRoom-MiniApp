@@ -327,6 +327,18 @@ export interface LoyaltyRates {
   approachNotifyPoints: number;
 }
 
+export interface AdminTransaction {
+  id: number;
+  userId: number;
+  guestName: string;
+  cardNumber: string;
+  coins: number;
+  rating: number;
+  type: string;
+  description: string;
+  createdAt: string;
+}
+
 export interface AdminGuest {
   id: number;
   vkId: string;
