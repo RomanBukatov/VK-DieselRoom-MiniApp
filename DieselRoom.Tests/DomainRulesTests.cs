@@ -255,6 +255,40 @@ public class CommentFilterAndCodesTests
     }
 
     [Fact]
+    public void Achievements_AreComputedFromConfigurableRules()
+    {
+        AchievementRule[] rules =
+        [
+            new("vip", "flame", "Завсегдатай", "20 визитов", Achievements.MetricVisits, 20),
+            new("top10", "trophy", "Топ-10", "Войти в Топ-10", Achievements.MetricPodium, 10),
+            new("hidden", "gift", "Скрытое", "Не показывается", Achievements.MetricGifts, 1, Enabled: false),
+        ];
+
+        var list = Achievements.Compute(visits: 12, paidReferrals: 0, giftsReceived: 5, bestWeeklyRank: 7, rules);
+        Assert.Equal(["vip", "top10"], list.Select(a => a.Key));
+        Assert.Equal((false, 12, 20), (list[0].Unlocked, list[0].Progress, list[0].Target));
+        Assert.True(list[1].Unlocked);
+        Assert.False(Achievements.Compute(1, 0, 0, 11, rules)[1].Unlocked);
+        Assert.False(Achievements.Compute(1, 0, 0, 0, rules)[1].Unlocked); // места нет вовсе
+
+        Assert.Equal(6, Achievements.Compute(0, 0, 0, 0).Count); // без настроек — стандартный набор
+    }
+
+    [Fact]
+    public void Achievements_Validation()
+    {
+        Assert.Empty(Achievements.Validate(Achievements.Default));
+        var ok = Achievements.Default[0];
+        Assert.NotEmpty(Achievements.Validate([ok, ok])); // повтор ключа
+        Assert.NotEmpty(Achievements.Validate([ok with { Key = "Плохой ключ" }]));
+        Assert.NotEmpty(Achievements.Validate([ok with { Title = " " }]));
+        Assert.NotEmpty(Achievements.Validate([ok with { Metric = "money" }]));
+        Assert.NotEmpty(Achievements.Validate([ok with { Target = 0 }]));
+        Assert.NotEmpty(Achievements.Validate([ok with { Metric = Achievements.MetricPodium, Target = 51 }]));
+        Assert.NotEmpty(Achievements.Validate([ok with { Icon = "<b>" }]));
+    }
+
+    [Fact]
     public void GuestLevels_Validation()
     {
         Assert.Empty(GuestLevels.Validate(GuestLevels.Default));

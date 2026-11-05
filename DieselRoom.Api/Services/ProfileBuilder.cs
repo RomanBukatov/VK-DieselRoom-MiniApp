@@ -35,6 +35,7 @@ public class ProfileBuilder
         var bestRank = new[] { bestArchived, privilege.Rank }.Where(r => r.HasValue).Select(r => r!.Value).DefaultIfEmpty(0).Min();
         var rates = await _settings.GetRatesAsync(ct);
         var levels = await _settings.GetLevelsAsync(ct);
+        var achievementRules = await _settings.GetAchievementsAsync(ct);
         var race = await _rating.GetRaceProgressAsync(user, privilege.Rank, ct);
         var tasks = await BuildTasksAsync(user, rates, ct);
 
@@ -43,7 +44,7 @@ public class ProfileBuilder
             user.DieselCoinsBalance, user.TotalCoinsEarned, user.WeeklyRating, user.TotalRating,
             privilege.Rank, totalRank, user.VisitsCount,
             PrivilegeDto.From(privilege),
-            Achievements.Compute(user.VisitsCount, rewarded, giftsReceived, bestRank),
+            Achievements.Compute(user.VisitsCount, rewarded, giftsReceived, bestRank, achievementRules),
             new ReferralInfoDto(user.CardNumber, invited, rewarded, rates.ReferralCoins, rates.ReferralRating,
                 user.ReferredByUserId != null, UserService.CanEnterReferralCode(user, now)),
             staff.Role, staff.IsStaff ? staff.Name : null,

@@ -340,6 +340,31 @@ public class RatingAndPrivilegeTests
     }
 
     [Fact]
+    public async Task Admin_MayTestEverythingOnThemselves_AuditKeepsTrace()
+    {
+        using var t = new TestDb();
+        var now = TestTimes.MondayLunch;
+        var stas = t.AddUser("1001", coins: 500, weekly: 100, weeklyAt: T0);
+        var item = t.AddItem();
+        var admin = new StaffIdentity(StaffRole.Admin, null, "Стас", "1001", "1001");
+
+        Assert.True((await t.Create().Visits.AccrueAsync(admin, stas.Id, "ADM-1", VisitType.Regular, now)).Ok);
+
+        var s = t.Create();
+        Assert.True((await s.Privileges.RedeemAsync(admin, stas.Id, s.Privileges.GetCode(stas.Id, now).Code, now)).Ok);
+
+        var order = (await t.Create().Shop.PurchaseAsync(stas.Id, item.Id, now)).Value!;
+        Assert.True((await t.Create().Shop.IssueAsync(admin, order.Code, now)).Ok);
+
+        using var db = t.NewContext();
+        Assert.Equal(3, await db.StaffAuditLogs.CountAsync(a => a.StaffName == "Стас"));
+
+        // Обычный сотрудник с тем же VK ID тем же самым заблокирован
+        var staff = admin with { Role = StaffRole.Staff };
+        Assert.Equal(403, (await t.Create().Visits.AccrueAsync(staff, stas.Id, "ADM-2", VisitType.Regular, now)).StatusCode);
+    }
+
+    [Fact]
     public async Task StreakPrize_IsMarkedAgeRestricted()
     {
         using var t = new TestDb();

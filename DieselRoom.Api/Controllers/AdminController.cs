@@ -280,7 +280,8 @@ public class AdminController : ControllerBase
 
         var guest = await _db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == id, ct);
         if (guest == null) return Error("Гость не найден.", 404);
-        if (Admin.IsSelf(guest.VkId)) return Error(StaffIdentity.SelfServiceError, 403);
+        // Тестовые чеки и выдачу администратор проверяет на себе, но баланс себе не правит даже он
+        if (Admin.IsSameGuest(guest.VkId)) return Error("Нельзя корректировать баллы самому себе.", 403);
 
         if (!await Ledger.AdjustAsync(_db, id, r.Coins, r.Rating, $"Корректировка: {reason}", Now, ct))
         {
@@ -313,6 +314,23 @@ public class AdminController : ControllerBase
         await _settings.SaveLevelsAsync(clean, ct);
         await SaveWithAuditAsync(StaffAuditActions.SettingsChanged,
             "Уровни гостя: " + string.Join(", ", clean.Select(l => $"{l.Title} от {l.MinRating}")), ct);
+        return clean;
+    }
+
+    // ---------------- Достижения ----------------
+
+    [HttpGet("achievements")]
+    public Task<IReadOnlyList<AchievementRule>> Achievements(CancellationToken ct) => _settings.GetAchievementsAsync(ct);
+
+    [HttpPut("achievements")]
+    public async Task<ActionResult<IReadOnlyList<AchievementRule>>> UpdateAchievements([FromBody] List<AchievementRule> rules, CancellationToken ct)
+    {
+        var errors = DieselRoom.Domain.Services.Achievements.Validate(rules).Distinct().ToList();
+        if (errors.Count > 0) return Error(string.Join(" ", errors));
+        var clean = rules.Select(r => r with { Title = r.Title.Trim(), Description = r.Description.Trim() }).ToList();
+        await _settings.SaveAchievementsAsync(clean, ct);
+        await SaveWithAuditAsync(StaffAuditActions.SettingsChanged,
+            "Достижения: " + string.Join(", ", clean.Select(r => $"{r.Title} ({r.Metric} ≥ {r.Target}{(r.Enabled ? "" : ", скрыто")})")), ct);
         return clean;
     }
 

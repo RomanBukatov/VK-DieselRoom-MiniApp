@@ -519,6 +519,35 @@ public class ApiIntegrationTests : IClassFixture<DieselApp>
     }
 
     [Fact]
+    public async Task AchievementsEditor_AdminOnly_ChangesGuestProfile()
+    {
+        AddStaff("Бармен Без Прав", StaffRole.Staff, vkId: "4950");
+        var admin = _app.ClientFor("1001");
+        var original = await ReadJson(await admin.GetAsync("/api/admin/achievements"));
+        Assert.Equal(6, original.GetArrayLength());
+
+        var rules = new[]
+        {
+            new { key = "regular", icon = "flame", title = "Завсегдатай", description = "3 визита по чекам", metric = "visits", target = 3, enabled = true },
+            new { key = "hidden", icon = "gift", title = "Скрытое", description = "Не видно гостю", metric = "gifts", target = 1, enabled = false },
+        };
+        Assert.Equal(HttpStatusCode.Forbidden, (await _app.ClientFor("4950").PutAsJsonAsync("/api/admin/achievements", rules)).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await admin.PutAsJsonAsync("/api/admin/achievements", new[] { rules[0], rules[0] })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await admin.PutAsJsonAsync("/api/admin/achievements", new[] { rules[0] with { metric = "money" } })).StatusCode);
+
+        Assert.Equal(HttpStatusCode.OK, (await admin.PutAsJsonAsync("/api/admin/achievements", rules)).StatusCode);
+        var profile = await ReadJson(await _app.ClientFor("2111").GetAsync("/api/users/me"));
+        var shown = profile.GetProperty("achievements").EnumerateArray().ToList();
+        Assert.Equal("Завсегдатай", Assert.Single(shown).GetProperty("title").GetString());
+        Assert.Equal(3, shown[0].GetProperty("target").GetInt32());
+
+        var audit = await ReadJson(await admin.GetAsync("/api/admin/audit?action=SettingsChanged"));
+        Assert.Contains(audit.EnumerateArray(), a => a.GetProperty("details").GetString()!.Contains("Достижения: Завсегдатай"));
+
+        Assert.Equal(HttpStatusCode.OK, (await admin.PutAsJsonAsync("/api/admin/achievements", original)).StatusCode);
+    }
+
+    [Fact]
     public async Task MediaUpload_ValidatesContent_ServedPublicly_UsableAsPrizePhoto()
     {
         var admin = _app.ClientFor("1001");

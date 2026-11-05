@@ -12,6 +12,7 @@ public class SettingsService
 {
     public const string RatesKey = "loyalty.rates";
     public const string LevelsKey = "loyalty.levels";
+    public const string AchievementsKey = "loyalty.achievements";
     public const string LastClosedWeekKey = "race.lastClosedWeek";
 
     private readonly AppDbContext _db;
@@ -53,6 +54,24 @@ public class SettingsService
         }
     }
 
+    public async Task<IReadOnlyList<AchievementRule>> GetAchievementsAsync(CancellationToken ct = default)
+    {
+        var raw = await GetAsync(AchievementsKey, ct);
+        if (string.IsNullOrWhiteSpace(raw)) return Achievements.Default;
+        try
+        {
+            var rules = JsonSerializer.Deserialize<List<AchievementRule>>(raw);
+            return rules != null && !Achievements.Validate(rules).Any() ? rules : Achievements.Default;
+        }
+        catch (JsonException)
+        {
+            return Achievements.Default;
+        }
+    }
+
+    public Task SaveAchievementsAsync(IReadOnlyList<AchievementRule> rules, CancellationToken ct = default) =>
+        SetAsync(AchievementsKey, JsonSerializer.Serialize(rules), ct);
+
     public Task SaveLevelsAsync(IReadOnlyList<LevelRule> levels, CancellationToken ct = default) =>
         SetAsync(LevelsKey, JsonSerializer.Serialize(levels), ct);
 
@@ -85,8 +104,14 @@ public sealed record StaffIdentity(StaffRole Role, int? StaffMemberId, string Na
     public bool IsAdmin => Role == StaffRole.Admin;
 
     /// <summary>Сотрудник не начисляет и не выдаёт ничего самому себе: ни со своего телефона, ни по своему ПИН-коду.</summary>
-    public bool IsSelf(string? guestVkId) =>
+    public bool IsSameGuest(string? guestVkId) =>
         !string.IsNullOrWhiteSpace(guestVkId) && (guestVkId == VkId || guestVkId == LinkedVkId);
+
+    /// <summary>
+    /// Запрет самообслуживания касается сотрудников. Владелец и арт-директор (Admin) при приёмке проверяют программу
+    /// на себе: тестовые чеки, подарки и привилегии им разрешены, а следы остаются в журнале аудита.
+    /// </summary>
+    public bool IsSelf(string? guestVkId) => !IsAdmin && IsSameGuest(guestVkId);
 
     public const string SelfServiceError = "Нельзя начислять и выдавать самому себе: попросите другого сотрудника.";
 }

@@ -6,12 +6,13 @@ import { apiErrorMessage } from '../../api/client';
 import { useApp } from '../../store/useApp';
 import { BOOKING_FORMATS } from '../../domain/booking';
 import { KeyIcon } from '../../components/Icon';
-import { MENU_ICON_KEYS, PRIZE_ICON_KEYS } from '../../config/icons';
+import { ICONS, MENU_ICON_KEYS, PRIZE_ICON_KEYS } from '../../config/icons';
+import { METRIC_LABELS, emptyAchievement, validateAchievements } from '../../domain/achievements';
 import { PrizeVisual } from '../../components/Brand';
 import { formatFullDate, formatPermDateTime } from '../../utils/format';
 import { imageFileToDataUrl } from '../../utils/imageUpload';
 import { GuestsAdmin } from './GuestsAdmin';
-import type { AfishaEvent, Banner, LevelRule, LoyaltyRates, MenuLink, ShopItem, StaffAuditEntry, StaffMember } from '../../types';
+import type { AchievementMetric, AchievementRule, AfishaEvent, Banner, LevelRule, LoyaltyRates, MenuLink, ShopItem, StaffAuditEntry, StaffMember } from '../../types';
 
 type Section = 'afisha' | 'shop' | 'rates' | 'guests' | 'staff' | 'audit';
 
@@ -397,7 +398,72 @@ const RatesAdmin: React.FC = () => {
       </Button>
     </Card>
     <LevelsAdmin />
+    <AchievementsAdmin />
     </div>
+  );
+};
+
+const ACHIEVEMENT_ICON_KEYS = ['ant', ...Object.keys(ICONS)];
+
+/** Достижения: название, условие, показатель и цель настраивает администратор; скрытые не видны гостям. */
+const AchievementsAdmin: React.FC = () => {
+  const loaded = useAdminList(adminApi.achievements);
+  const saver = useSaver();
+  const [draft, setDraft] = useState<AchievementRule[] | null>(null);
+  const value = draft ?? loaded.data;
+
+  if (!value) return <ErrorLine text={loaded.error} onRetry={loaded.reload} />;
+  const patch = (index: number, change: Partial<AchievementRule>) => setDraft(value.map((r, i) => (i === index ? { ...r, ...change } : r)));
+
+  const save = async () => {
+    const problem = validateAchievements(value);
+    if (problem) return saver.setError(problem);
+    if (await saver.run(() => adminApi.saveAchievements(value), 'Достижения сохранены.')) {
+      setDraft(null);
+      void loaded.reload();
+    }
+  };
+
+  return (
+    <Card>
+      <div className="flex items-center justify-between mb-2">
+        <div className="text-xs font-bold uppercase text-dr-muted">Достижения</div>
+        <Button size="sm" variant="dark" onClick={() => setDraft([...value, emptyAchievement(value)])}>
+          <Plus className="w-3.5 h-3.5" /> Достижение
+        </Button>
+      </div>
+      <div className="space-y-3">
+        {value.map((r, i) => (
+          <div key={r.key} className="rounded-xl border border-dr-border bg-dr-surface p-3 space-y-2">
+            <div className="grid grid-cols-[110px_1fr] gap-2">
+              <Field label="Иконка">
+                <select className={inputClass} value={r.icon} onChange={(e) => patch(i, { icon: e.target.value })}>
+                  {ACHIEVEMENT_ICON_KEYS.map((k) => <option key={k} value={k}>{k}</option>)}
+                </select>
+              </Field>
+              <Field label="Название"><input className={inputClass} maxLength={40} value={r.title} onChange={(e) => patch(i, { title: e.target.value })} /></Field>
+            </div>
+            <Field label="Условие (видно гостю)"><input className={inputClass} maxLength={100} value={r.description} onChange={(e) => patch(i, { description: e.target.value })} /></Field>
+            <div className="grid grid-cols-[1fr_90px] gap-2">
+              <Field label="Показатель">
+                <select className={inputClass} value={r.metric} onChange={(e) => patch(i, { metric: e.target.value as AchievementMetric })}>
+                  {(Object.keys(METRIC_LABELS) as AchievementMetric[]).map((m) => <option key={m} value={m}>{METRIC_LABELS[m]}</option>)}
+                </select>
+              </Field>
+              <Field label={r.metric === 'podium' ? 'Топ-N' : 'Цель'}>
+                <input inputMode="numeric" className={inputClass} value={r.target} onChange={(e) => patch(i, { target: Number(e.target.value.replace(/\D/g, '')) || 0 })} />
+              </Field>
+            </div>
+            <div className="flex items-center justify-between">
+              <Check label="Показывать гостям" checked={r.enabled} onChange={(v) => patch(i, { enabled: v })} />
+              <Button size="sm" variant="ghost" onClick={() => setDraft(value.filter((_, idx) => idx !== i))}><Trash2 className="w-3.5 h-3.5" /> Удалить</Button>
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="mt-2"><ErrorLine text={saver.error} /></div>
+      <Button className="w-full mt-3" disabled={saver.busy || !draft} onClick={save}>Сохранить достижения</Button>
+    </Card>
   );
 };
 

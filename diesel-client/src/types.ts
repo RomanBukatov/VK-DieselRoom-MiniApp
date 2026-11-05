@@ -43,6 +43,18 @@ export interface GuestLevel {
   pointsToNext: number | null;
 }
 
+export type AchievementMetric = 'visits' | 'referrals' | 'gifts' | 'podium';
+
+export interface AchievementRule {
+  key: string;
+  icon: string;
+  title: string;
+  description: string;
+  metric: AchievementMetric;
+  target: number;
+  enabled: boolean;
+}
+
 export interface LevelRule {
   title: string;
   minRating: number;

@@ -239,18 +239,65 @@ public static class GuestLevels
 /// <summary>Достижения гостя: вычисляются из статистики, отдельной таблицы не требуют.</summary>
 public sealed record Achievement(string Key, string Icon, string Title, string Description, bool Unlocked, int Progress, int Target);
 
+/// <summary>
+/// Правило достижения, настраиваемое в админке. Metric — что считается: visits (визиты по чекам), referrals (друзья,
+/// ставшие гостями), gifts (полученные подарки), podium (гость хотя бы раз входил в Топ-Target недельной гонки).
+/// </summary>
+public sealed record AchievementRule(string Key, string Icon, string Title, string Description, string Metric, int Target, bool Enabled = true);
+
 public static class Achievements
 {
-    public static IReadOnlyList<Achievement> Compute(int visits, int paidReferrals, int giftsReceived, int bestWeeklyRank)
+    public const string MetricVisits = "visits";
+    public const string MetricReferrals = "referrals";
+    public const string MetricGifts = "gifts";
+    public const string MetricPodium = "podium";
+    public static readonly string[] Metrics = [MetricVisits, MetricReferrals, MetricGifts, MetricPodium];
+
+    public const int MaxRules = 20;
+
+    private static readonly Regex KeyRegex = new(@"^[a-z0-9_]{1,32}$", RegexOptions.Compiled);
+    private static readonly Regex IconRegex = new(@"^[a-z-]{1,32}$", RegexOptions.Compiled);
+
+    public static readonly IReadOnlyList<AchievementRule> Default =
+    [
+        new("first_visit", "door", "Первый визит", "Первый визит по чеку", MetricVisits, 1),
+        new("visits_5", "flame", "5 посещений", "5 визитов по чекам", MetricVisits, 5),
+        new("visits_10", "ant", "10 посещений", "10 визитов по чекам", MetricVisits, 10),
+        new("first_friend", "users", "Привёл друга", "Друг пришёл по вашей ссылке", MetricReferrals, 1),
+        new("first_gift", "gift", "Первый подарок", "Получили подарок из магазина", MetricGifts, 1),
+        new("podium", "trophy", "Пьедестал", "Топ-3 недельной гонки", MetricPodium, 3),
+    ];
+
+    public static IEnumerable<string> Validate(IReadOnlyList<AchievementRule>? rules)
     {
-        return
-        [
-            new("first_visit", "door", "Первый визит", "Первый визит по чеку", visits >= 1, Math.Min(visits, 1), 1),
-            new("visits_5", "flame", "5 посещений", "5 визитов по чекам", visits >= 5, Math.Min(visits, 5), 5),
-            new("visits_10", "ant", "10 посещений", "10 визитов по чекам", visits >= 10, Math.Min(visits, 10), 10),
-            new("first_friend", "users", "Привёл друга", "Друг пришёл по вашей ссылке", paidReferrals >= 1, Math.Min(paidReferrals, 1), 1),
-            new("first_gift", "gift", "Первый подарок", "Получили подарок из магазина", giftsReceived >= 1, Math.Min(giftsReceived, 1), 1),
-            new("podium", "trophy", "Пьедестал", "Топ-3 недельной гонки", bestWeeklyRank is >= 1 and <= 3, bestWeeklyRank is >= 1 and <= 3 ? 1 : 0, 1),
-        ];
+        if (rules is not { Count: <= MaxRules }) { yield return $"Достижений — не больше {MaxRules}."; yield break; }
+
+        var seen = new HashSet<string>();
+        foreach (var r in rules)
+        {
+            if (r.Key == null || !KeyRegex.IsMatch(r.Key)) yield return "Ключ достижения: латиница, цифры и «_», до 32 символов.";
+            else if (!seen.Add(r.Key)) yield return $"Ключ «{r.Key}» повторяется.";
+            if (string.IsNullOrWhiteSpace(r.Title) || r.Title.Trim().Length > 40) yield return "Название достижения: от 1 до 40 символов.";
+            if (string.IsNullOrWhiteSpace(r.Description) || r.Description.Trim().Length > 100) yield return "Условие достижения: от 1 до 100 символов.";
+            if (r.Icon == null || !IconRegex.IsMatch(r.Icon)) yield return "Иконка достижения: ключ из списка.";
+            if (!Metrics.Contains(r.Metric)) yield return "Неизвестный показатель достижения.";
+            else if (r.Target < 1 || r.Target > (r.Metric == MetricPodium ? PrivilegeCatalog.LastPrizeRank : 1000))
+                yield return r.Metric == MetricPodium ? $"Место для пьедестала — от 1 до {PrivilegeCatalog.LastPrizeRank}." : "Цель достижения — от 1 до 1000.";
+        }
+    }
+
+    public static IReadOnlyList<Achievement> Compute(int visits, int paidReferrals, int giftsReceived, int bestWeeklyRank,
+        IReadOnlyList<AchievementRule>? rules = null)
+    {
+        return (rules ?? Default).Where(r => r.Enabled).Select(r =>
+        {
+            if (r.Metric == MetricPodium)
+            {
+                var reached = bestWeeklyRank >= 1 && bestWeeklyRank <= r.Target;
+                return new Achievement(r.Key, r.Icon, r.Title, r.Description, reached, reached ? 1 : 0, 1);
+            }
+            var value = r.Metric switch { MetricVisits => visits, MetricReferrals => paidReferrals, _ => giftsReceived };
+            return new Achievement(r.Key, r.Icon, r.Title, r.Description, value >= r.Target, Math.Min(value, r.Target), r.Target);
+        }).ToList();
     }
 }
